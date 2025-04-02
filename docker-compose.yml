@@ -1,0 +1,8 @@
+services:
+  app:
+    image: caijunhui/trading-data:latest
+    container_name: trading-data
+    ports:
+      - "18084:8080"
+    env_file:
+      - .env

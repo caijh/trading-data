@@ -1,0 +1,27 @@
+[database]
+host = "127.0.0.1"
+port = 3306
+user = "root"
+password = "123456"
+name = "stock"
+kind = "mysql"
+
+[redis]
+host = "127.0.0.1"
+port = 6379
+user = "default"
+password = "redis"
+
+[stock.api.sh]
+baseurl = "https://yunhq.sse.com.cn:32042"
+[stock.api.sz]
+baseurl = "http://www.szse.cn"
+[stock.api.hk]
+baseurl = "https://www1.hkex.com.hk"
+[stock.api.nasdaq]
+baseurl = "https://api.nasdaq.com"
+charting = "https://charting.nasdaq.com"
+
+[notification]
+url = "https://message.joinspace.pp.ua"
+receiver = ""

@@ -1,0 +1,25 @@
+[application]
+name = "trading-data"
+port = 8080
+
+[application.config]
+activate.profiles = ["default"]
+locations = ["."]
+file_names = ["config.toml"]
+
+[application.cloud.discovery]
+server.address = "http://127.0.0.1:8500"
+server.token = ""
+host.ip = "127.0.0.1"
+host.port = 8080
+
+[application.cloud.config]
+enabled = false
+address = "http://127.0.0.1:8500"
+token = ""
+
+[logger]
+enabled = true
+level = "info"
+file = "trading-data-server.log"
+log_dir = "./logs"
