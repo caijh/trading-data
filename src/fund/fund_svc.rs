@@ -1,14 +1,16 @@
-use crate::fund::fund_model;
+use crate::exchange::exchange_model::Exchange;
+use crate::fund::fund_dao;
 use crate::fund::fund_model::Model;
-use application_beans::factory::bean_factory::BeanFactory;
-use application_context::context::application_context::APPLICATION_CONTEXT;
-use database_mysql_seaorm::Dao;
-use sea_orm::EntityTrait;
 use std::error::Error;
+use std::str::FromStr;
 
 pub async fn find_all() -> Result<Vec<Model>, Box<dyn Error>> {
-    let application_context = APPLICATION_CONTEXT.read().await;
-    let dao = application_context.get_bean_factory().get::<Dao>();
-    let funds = fund_model::Entity::find().all(&dao.connection).await?;
+    let funds = fund_dao::find_all().await?;
+    Ok(funds)
+}
+
+pub async fn find_by_exchange(exchange: &str) -> Result<Vec<Model>, Box<dyn Error>> {
+    let exchange = Exchange::from_str(exchange)?;
+    let funds = fund_dao::find_by_exchange(exchange.as_ref()).await?;
     Ok(funds)
 }
