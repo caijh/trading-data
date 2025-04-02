@@ -1,4 +1,5 @@
 use crate::exchange::exchange_job::SyncStocksJob;
+use crate::exchange::exchange_model::Exchange;
 use crate::exchange::exchange_svc;
 use application_core::lang::runnable::Runnable;
 use application_web::response::RespBody;
@@ -12,6 +13,22 @@ use tracing::info;
 #[derive(Serialize, Deserialize)]
 struct MarketStatusParams {
     pub stock_code: String,
+}
+
+/// 获取交易所列表
+///
+/// 该函数处理对/exchange/list路径的GET请求，返回一个交易所列表
+///
+/// # Returns
+///
+/// * `impl IntoResponse` - 返回一个实现了IntoResponse trait的类型，用于生成HTTP响应
+#[get("/exchange/list")]
+async fn exchange_list() -> impl IntoResponse {
+    let exchanges = Exchange::VALUES
+        .iter()
+        .map(|e| e.as_ref().to_string())
+        .collect::<Vec<_>>();
+    RespBody::success(&exchanges)
 }
 
 #[get("/exchange/:exchange/time")]
