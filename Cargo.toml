@@ -46,7 +46,7 @@ tempfile = "3.15.0"
 lazy_static = "1.5.0"
 chrono-tz = "0.10.0"
 scraper = "0.23.1"
-
+zip = { git = "https://github.com/zip-rs/zip2", rev = "77cde6a" }
 [features]
 default = ["signal"]
 signal = ["tokio-cron-scheduler/signal"]
