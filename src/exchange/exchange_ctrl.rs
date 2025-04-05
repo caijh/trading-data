@@ -37,6 +37,28 @@ async fn exchange_current_time(Path(exchange): Path<String>) -> impl IntoRespons
     RespBody::result(&r)
 }
 
+/// 从缓存中获取指定交易所的市场状态信息
+///
+/// # Arguments
+/// * `exchange` - 一个字符串参数，通过URL路径传递，指定要查询的交易所代码
+///
+/// # Returns
+/// 返回一个实现了IntoResponse trait的类型，用于构建HTTP响应
+///
+/// # Remarks
+/// 使用Path参数来捕获URL中的exchange部分，以便于获取特定交易所的信息
+/// 通过调用`exchange_svc::get_market_status_from_cache`函数来从缓存中获取市场状态信息
+/// 最后使用`RespBody::result`来根据查询结果构建HTTP响应
+#[get("/exchange/:exchange/market/status")]
+async fn get_market_status(
+    Path(exchange): Path<String>,
+) -> impl IntoResponse {
+    let r = exchange_svc::get_market_status_from_cache(&exchange).await;
+    RespBody::result(&r)
+}
+
+
+
 #[get("/market/status")]
 async fn get_market_status_by_stock_code(
     Query(params): Query<MarketStatusParams>,

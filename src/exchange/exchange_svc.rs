@@ -14,7 +14,10 @@ use std::time::Duration;
 
 async fn get_market_status_by_stock_code(code: &str) -> Result<String, Box<dyn Error>> {
     let stock = stock_svc::get_stock(code).await?;
-    let exchange = &stock.exchange;
+    get_market_status(&stock.exchange).await
+}
+
+async fn get_market_status(exchange: &str) -> Result<String, Box<dyn Error>> {
     let exchange = exchange_model::Exchange::from_str(exchange)?;
     // 判断今天是否为周六日
     let date = Local::now().with_timezone(&exchange.time_zone());
@@ -57,6 +60,7 @@ async fn get_market_status_by_stock_code(code: &str) -> Result<String, Box<dyn E
     Ok("MarketClosed".to_string())
 }
 
+
 pub async fn get_market_status_by_stock_code_from_cache(
     code: &str,
 ) -> Result<String, Box<dyn Error>> {
@@ -77,6 +81,28 @@ pub async fn get_market_status_by_stock_code_from_cache(
     .await;
     Ok(market_status)
 }
+
+pub async fn get_market_status_from_cache(
+    exchange: &str,
+) -> Result<String, Box<dyn Error>> {
+    let key = format!("MarketStatus:{}", exchange);
+    let market_status = CacheManager::get_from("MarketStatus", &key).await;
+    if market_status.is_some() {
+        let market_status = market_status.unwrap();
+        return Ok(market_status);
+    }
+
+    let market_status = get_market_status(exchange).await?;
+    CacheManager::set_to(
+        "MarketStatus",
+        &key,
+        &market_status,
+        Duration::from_secs(300),
+    )
+        .await;
+    Ok(market_status)
+}
+
 
 pub async fn get_current_time(exchange: &str) -> Result<String, Box<dyn Error>> {
     let exchange = Exchange::from_str(exchange)?;
