@@ -60,7 +60,6 @@ async fn get_market_status(exchange: &str) -> Result<String, Box<dyn Error>> {
     Ok("MarketClosed".to_string())
 }
 
-
 pub async fn get_market_status_by_stock_code_from_cache(
     code: &str,
 ) -> Result<String, Box<dyn Error>> {
@@ -82,9 +81,7 @@ pub async fn get_market_status_by_stock_code_from_cache(
     Ok(market_status)
 }
 
-pub async fn get_market_status_from_cache(
-    exchange: &str,
-) -> Result<String, Box<dyn Error>> {
+pub async fn get_market_status_from_cache(exchange: &str) -> Result<String, Box<dyn Error>> {
     let key = format!("MarketStatus:{}", exchange);
     let market_status = CacheManager::get_from("MarketStatus", &key).await;
     if market_status.is_some() {
@@ -99,12 +96,21 @@ pub async fn get_market_status_from_cache(
         &market_status,
         Duration::from_secs(300),
     )
-        .await;
+    .await;
     Ok(market_status)
 }
 
-
-pub async fn get_current_time(exchange: &str) -> Result<String, Box<dyn Error>> {
+/// 获取指定交易所的当前时间。
+///
+/// 本函数根据交易所的时区信息，获取当前的时间并格式化返回。
+///
+/// # 参数
+/// * `exchange` - 一个字符串切片，表示交易所的名称。
+///
+/// # 返回值
+/// * `Ok(String)` - 格式化后的当前时间字符串，格式为 "%Y-%m-%d %H:%M:%S"。
+/// * `Err(Box<dyn Error>)` - 如果交易所解析失败或时区处理出现问题，则返回一个错误。
+async fn get_current_time(exchange: &str) -> Result<String, Box<dyn Error>> {
     let exchange = Exchange::from_str(exchange)?;
     let time = Utc::now().with_timezone(&exchange.time_zone());
     Ok(time.format("%Y-%m-%d %H:%M:%S").to_string())
