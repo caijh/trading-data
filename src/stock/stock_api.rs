@@ -115,7 +115,7 @@ pub async fn download(url: &str, path: &Path) -> Result<(), Box<dyn Error>> {
 pub fn read_stocks_from_sh_excel(
     path: &Path,
     exchange: &Exchange,
-) -> Result<Vec<crate::stock::stock_model::Model>, Box<dyn Error>> {
+) -> Result<Vec<Model>, Box<dyn Error>> {
     let mut excel_xls: Xls<_> = open_workbook(path)?;
 
     let mut stocks = Vec::new();
@@ -151,7 +151,7 @@ pub fn read_stocks_from_sz_excel(
                 continue;
             }
             stocks.push(Model {
-                code: format!("{}{}", row[4].to_string(), exchange.stock_code_suffix()),
+                code: format!("{}{}", row[4], exchange.stock_code_suffix()),
                 name: row[5].to_string(),
                 exchange: exchange.as_ref().to_string(),
                 stock_type: "Stock".to_string(),
