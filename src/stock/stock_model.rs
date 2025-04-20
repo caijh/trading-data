@@ -1,5 +1,6 @@
 use sea_orm::entity::prelude::*;
 use sea_orm::{ActiveModelBehavior, DeriveEntityModel, DeriveRelation, EnumIter};
+use std::fmt::Display;
 
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
@@ -43,4 +44,21 @@ pub struct StockPrice {
     pub volume: Option<BigDecimal>,
     pub amount: Option<BigDecimal>,
     pub time: String,
+}
+
+pub enum StockKind {
+    Stock,
+    Fund,
+    Index,
+}
+
+impl Display for StockKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            StockKind::Stock => "Stock".to_string(),
+            StockKind::Fund => "Fund".to_string(),
+            StockKind::Index => "Index".to_string(),
+        };
+        write!(f, "{}", str)
+    }
 }

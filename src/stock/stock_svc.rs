@@ -1,13 +1,13 @@
 use crate::exchange::exchange_model::Exchange;
 use crate::fund::fund_api::FundApi;
-use crate::fund::fund_model;
+use crate::fund::{fund_dao, fund_model};
 use crate::holiday::holiday_svc::today_is_holiday;
 use crate::stock::stock_api::StockApi;
-use crate::stock::stock_model::{Model as Stock, StockPrice};
+use crate::stock::stock_model::{Model as Stock, StockKind, StockPrice};
 use crate::stock::stock_price_api::{StockDailyPriceDTO, StockPriceApi};
 use crate::stock::stock_price_model::Model as StockDailyPrice;
 use crate::stock::{
-    stock_model, stock_price_api, stock_price_dao, stock_price_model, sync_record_dao,
+    stock_dao, stock_model, stock_price_api, stock_price_dao, stock_price_model, sync_record_dao,
     sync_record_model,
 };
 use application_beans::factory::bean_factory::BeanFactory;
@@ -19,9 +19,7 @@ use database_mysql_seaorm::Dao;
 use redis::Commands;
 use redis_io::Redis;
 use sea_orm::ActiveValue::Set;
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter,
-};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter};
 use std::error::Error;
 use std::ops::Not;
 use std::str::FromStr;
@@ -36,14 +34,14 @@ pub async fn sync(exchange: &str) -> Result<(), Box<dyn Error>> {
 
 pub async fn sync_stocks(exchange: &Exchange) -> Result<(), Box<dyn Error>> {
     let stocks = exchange.get_stock().await?;
-    delete_stocks(exchange.as_ref()).await?;
+    delete_stocks(exchange).await?;
     save_stocks(&stocks).await?;
     Ok(())
 }
 
 pub async fn sync_funds(exchange: &Exchange) -> Result<(), Box<dyn Error>> {
     let stocks = exchange.get_funds().await?;
-    delete_funds(exchange.as_ref()).await?;
+    delete_funds(exchange).await?;
     save_stocks(&stocks).await?;
     save_funds(&stocks).await?;
     Ok(())
@@ -102,32 +100,14 @@ async fn save_funds(stocks: &Vec<Stock>) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-pub async fn delete_stocks(exchange: &str) -> Result<(), Box<dyn Error>> {
-    let application_context = APPLICATION_CONTEXT.read().await;
-    let dao = application_context.get_bean_factory().get::<Dao>();
-    stock_model::Entity::delete_many()
-        .filter(stock_model::Column::Exchange.eq(exchange))
-        .filter(stock_model::Column::StockType.eq("Stock"))
-        .exec(&dao.connection)
-        .await?;
-
+pub async fn delete_stocks(exchange: &Exchange) -> Result<(), Box<dyn Error>> {
+    stock_dao::delete_stocks_by_exchange_stock_kind(exchange, &StockKind::Stock).await?;
     Ok(())
 }
 
-pub async fn delete_funds(exchange: &str) -> Result<(), Box<dyn Error>> {
-    let application_context = APPLICATION_CONTEXT.read().await;
-    let dao = application_context.get_bean_factory().get::<Dao>();
-    fund_model::Entity::delete_many()
-        .filter(fund_model::Column::Exchange.eq(exchange))
-        .exec(&dao.connection)
-        .await?;
-
-    stock_model::Entity::delete_many()
-        .filter(stock_model::Column::Exchange.eq(exchange))
-        .filter(stock_model::Column::StockType.eq("Fund"))
-        .exec(&dao.connection)
-        .await?;
-
+pub async fn delete_funds(exchange: &Exchange) -> Result<(), Box<dyn Error>> {
+    fund_dao::delete_funds_by_exchange(exchange).await?;
+    stock_dao::delete_stocks_by_exchange_stock_kind(exchange, &StockKind::Fund).await?;
     Ok(())
 }
 

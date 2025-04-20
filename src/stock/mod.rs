@@ -1,9 +1,10 @@
 pub mod stock_api;
 mod stock_ctrl;
+pub mod stock_dao;
 pub mod stock_model;
 pub mod stock_price_api;
+mod stock_price_dao;
 pub mod stock_price_model;
 pub mod stock_svc;
-pub mod sync_record_model;
-mod stock_price_dao;
 mod sync_record_dao;
+pub mod sync_record_model;
