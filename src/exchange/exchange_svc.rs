@@ -110,7 +110,7 @@ pub async fn get_market_status_from_cache(exchange: &str) -> Result<String, Box<
 /// # 返回值
 /// * `Ok(String)` - 格式化后的当前时间字符串，格式为 "%Y-%m-%d %H:%M:%S"。
 /// * `Err(Box<dyn Error>)` - 如果交易所解析失败或时区处理出现问题，则返回一个错误。
-async fn get_current_time(exchange: &str) -> Result<String, Box<dyn Error>> {
+pub async fn get_current_time(exchange: &str) -> Result<String, Box<dyn Error>> {
     let exchange = Exchange::from_str(exchange)?;
     let time = Utc::now().with_timezone(&exchange.time_zone());
     Ok(time.format("%Y-%m-%d %H:%M:%S").to_string())
