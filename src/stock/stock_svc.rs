@@ -6,7 +6,10 @@ use crate::stock::stock_api::StockApi;
 use crate::stock::stock_model::{Model as Stock, StockPrice};
 use crate::stock::stock_price_api::{StockDailyPriceDTO, StockPriceApi};
 use crate::stock::stock_price_model::Model as StockDailyPrice;
-use crate::stock::{stock_model, stock_price_api, stock_price_model, sync_record_model};
+use crate::stock::{
+    stock_model, stock_price_api, stock_price_dao, stock_price_model, sync_record_dao,
+    sync_record_model,
+};
 use application_beans::factory::bean_factory::BeanFactory;
 use application_cache::CacheManager;
 use application_context::context::application_context::APPLICATION_CONTEXT;
@@ -17,7 +20,7 @@ use redis::Commands;
 use redis_io::Redis;
 use sea_orm::ActiveValue::Set;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter, QueryOrder,
+    ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter,
 };
 use std::error::Error;
 use std::ops::Not;
@@ -129,34 +132,28 @@ pub async fn delete_funds(exchange: &str) -> Result<(), Box<dyn Error>> {
 }
 
 pub async fn get_stock_daily_price_from_cache(
-    dao: &Dao,
     stock: &Stock,
-    date: u64,
 ) -> Result<Vec<stock_price_model::Model>, Box<dyn Error>> {
     let client = Redis::get_client();
     let mut con = client.get_connection()?;
-    let key = "Stock:".to_string() + &stock.code;
+    let key = "Stock:Price:K:D:".to_string() + &stock.code;
     let value = con.get::<&str, Option<String>>(&key)?;
     match value {
         None => {
-            let sync_record = sync_record_model::Entity::find_by_id(&stock.code)
-                .one(&dao.connection)
-                .await?;
+            let exchange = Exchange::from_str(&stock.exchange)?;
+            let date = Utc::now()
+                .with_timezone(&exchange.time_zone())
+                .format("%Y%m%d")
+                .to_string()
+                .parse::<u64>()
+                .unwrap();
+            let sync_record = sync_record_dao::get_sync_record(stock).await?;
             let mut updated: bool = false;
             if let Some(sync_record) = sync_record {
                 updated = sync_record.date == date && sync_record.updated;
             }
             let prices = if updated {
-                // 从数据库获取
-                let prices = stock_price_model::Entity::find()
-                    .filter(stock_price_model::Column::Code.eq(&stock.code))
-                    .order_by_asc(stock_price_model::Column::Date)
-                    .all(&dao.connection)
-                    .await?;
-                let client = Redis::get_client();
-                let mut con = client.get_connection()?;
-                let key = "Stock:".to_string() + &stock.code;
-                let exchange = Exchange::from_str(&stock.exchange)?;
+                let prices = stock_price_dao::get_stock_prices(stock).await?;
                 let now = Utc::now().with_timezone(&exchange.time_zone());
                 let seconds = 3600 * 24 - now.num_seconds_from_midnight();
                 con.set_ex::<&str, String, String>(
@@ -183,24 +180,9 @@ pub async fn get_stock_daily_price(
     use_cache: bool,
 ) -> Result<Vec<StockDailyPrice>, Box<dyn Error>> {
     info!("Get stock daily price, code = {}", code);
-    let application_context = APPLICATION_CONTEXT.read().await;
-    let dao = application_context.get_bean_factory().get::<Dao>();
-    let stock = stock_model::Entity::find_by_id(code)
-        .one(&dao.connection)
-        .await?;
-    if stock.is_none() {
-        return Err("Stock not found".into());
-    }
-    let stock = stock.unwrap();
-    let exchange = Exchange::from_str(&stock.exchange)?;
-    let date = Utc::now()
-        .with_timezone(&exchange.time_zone())
-        .format("%Y%m%d")
-        .to_string()
-        .parse::<u64>()
-        .unwrap();
+    let stock = get_stock(code).await?;
     let mut daily_prices: Vec<StockDailyPrice> = if use_cache {
-        get_stock_daily_price_from_cache(dao, &stock, date).await?
+        get_stock_daily_price_from_cache(&stock).await?
     } else {
         Vec::new()
     };
@@ -248,11 +230,7 @@ pub async fn sync_stock_daily_price(code: &str) -> Result<(), Box<dyn Error>> {
     info!("Sync stock {} daily price, updated = {}", code, updated);
     if !updated {
         // 从数据中获取
-        let prices = stock_price_model::Entity::find()
-            .filter(stock_price_model::Column::Code.eq(&stock.code))
-            .order_by_asc(stock_price_model::Column::Date)
-            .all(&dao.connection)
-            .await?;
+        let prices = stock_price_dao::get_stock_prices(&stock).await?;
         let last_price = if !prices.is_empty() {
             prices.last()
         } else {
