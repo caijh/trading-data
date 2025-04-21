@@ -2,7 +2,7 @@ use sea_orm::entity::prelude::*;
 use sea_orm::{ActiveModelBehavior, DeriveEntityModel, DeriveRelation, EnumIter};
 use serde::{Deserialize, Serialize};
 
-/// 休市日期
+/// 休市时间
 #[derive(Serialize, Deserialize, DeriveEntityModel, Debug, Clone)]
 #[sea_orm(table_name = "market_time")]
 pub struct Model {
