@@ -33,7 +33,7 @@ async fn exchange_list() -> impl IntoResponse {
 
 #[get("/exchange/:exchange/time")]
 async fn exchange_current_time(Path(exchange): Path<String>) -> impl IntoResponse {
-    let r = exchange_svc::get_current_time(&exchange).await;
+    let r = exchange_svc::get_exchange_current_time(&exchange).await;
     RespBody::result(&r)
 }
 
@@ -50,21 +50,17 @@ async fn exchange_current_time(Path(exchange): Path<String>) -> impl IntoRespons
 /// 通过调用`exchange_svc::get_market_status_from_cache`函数来从缓存中获取市场状态信息
 /// 最后使用`RespBody::result`来根据查询结果构建HTTP响应
 #[get("/exchange/:exchange/market/status")]
-async fn get_market_status(
-    Path(exchange): Path<String>,
-) -> impl IntoResponse {
-    let r = exchange_svc::get_market_status_from_cache(&exchange).await;
+async fn get_market_status(Path(exchange): Path<String>) -> impl IntoResponse {
+    let r = exchange_svc::get_exchange_market_status_cache(&exchange).await;
     RespBody::result(&r)
 }
-
-
 
 #[get("/market/status")]
 async fn get_market_status_by_stock_code(
     Query(params): Query<MarketStatusParams>,
 ) -> impl IntoResponse {
     info!("Get market status by stock_code {}", params.stock_code);
-    let r = exchange_svc::get_market_status_by_stock_code_from_cache(&params.stock_code).await;
+    let r = exchange_svc::get_stock_market_status_cache(&params.stock_code).await;
     RespBody::result(&r)
 }
 
