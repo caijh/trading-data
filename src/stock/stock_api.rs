@@ -14,12 +14,12 @@ use util::request::Request;
 
 #[async_trait]
 pub trait StockApi {
-    async fn get_stock(&self) -> Result<Vec<Model>, Box<dyn Error>>;
+    async fn get_stocks(&self) -> Result<Vec<Model>, Box<dyn Error>>;
 }
 
 #[async_trait]
 impl StockApi for Exchange {
-    async fn get_stock(&self) -> Result<Vec<Model>, Box<dyn Error>> {
+    async fn get_stocks(&self) -> Result<Vec<Model>, Box<dyn Error>> {
         match self {
             Exchange::SSE => {
                 let dir = tempdir()?;

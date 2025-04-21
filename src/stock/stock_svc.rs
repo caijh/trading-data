@@ -32,10 +32,28 @@ pub async fn sync(exchange: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// 同步股票信息
+///
+/// 该函数旨在从指定的交易所获取最新的股票信息，然后删除现有的股票信息，
+/// 并保存新的股票信息。这一过程确保了股票数据的最新状态。
+///
+/// # 参数
+///
+/// * `exchange` - 一个引用，指向要从中同步股票信息的交易所。
+///
+/// # 返回值
+///
+/// 该函数返回一个 `Result` 类型，表示操作是否成功。
+/// 如果操作成功，返回 `Ok(())`；如果发生错误，返回一个实现了 `Error` trait 的类型。
 pub async fn sync_stocks(exchange: &Exchange) -> Result<(), Box<dyn Error>> {
-    let stocks = exchange.get_stock().await?;
+    let stocks = exchange.get_stocks().await?;
+
+    // 删除现有的股票信息，为保存最新的股票信息做准备
     delete_stocks(exchange).await?;
+
+    // 保存从交易所获取的最新股票信息
     save_stocks(&stocks).await?;
+
     Ok(())
 }
 
