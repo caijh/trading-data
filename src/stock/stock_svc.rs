@@ -3,6 +3,7 @@ use crate::fund::fund_api::FundApi;
 use crate::fund::{fund_dao, fund_model};
 use crate::holiday::holiday_svc::today_is_holiday;
 use crate::stock::stock_api::StockApi;
+use crate::stock::stock_dao::get_stock_by_code;
 use crate::stock::stock_model::{Model as Stock, StockKind, StockPrice};
 use crate::stock::stock_price_api::{StockDailyPriceDTO, StockPriceApi};
 use crate::stock::stock_price_model::Model as StockDailyPrice;
@@ -348,22 +349,22 @@ pub async fn get_stock_price(code: &str) -> Result<StockPrice, Box<dyn Error>> {
 }
 
 pub async fn get_stock(code: &str) -> Result<Stock, Box<dyn Error>> {
-    let stock = CacheManager::get(code).await;
-    if stock.is_none() {
-        let application_context = APPLICATION_CONTEXT.read().await;
-        let dao = application_context.get_bean_factory().get::<Dao>();
-        let stock = stock_model::Entity::find_by_id(code)
-            .one(&dao.connection)
-            .await?;
-        match stock {
-            Some(stock) => {
-                CacheManager::set(code, &serde_json::to_string(&stock).unwrap()).await;
-                Ok(stock)
-            }
-            None => Err(format!("Stock {} not found or not support", code).into()),
-        }
-    } else {
-        let stock = serde_json::from_str(&stock.unwrap()).unwrap();
-        Ok(stock)
+    // 尝试从缓存中获取股票信息
+    if let Some(cached_stock) = CacheManager::get(code).await {
+        // 缓存命中，直接反序列化并返回
+        return serde_json::from_str(&cached_stock)
+            .map_err(|e| format!("Failed to deserialize cached stock: {}", e).into());
     }
+
+    // 缓存未命中，从数据库中查询
+    let stock = get_stock_by_code(code).await?;
+
+    if stock.is_none() {
+        return Err(format!("Stock {} not found or not supported", code).into());
+    }
+    let stock = stock.unwrap();
+    // 将查询结果存入缓存
+    CacheManager::set(code, &serde_json::to_string(&stock).unwrap()).await;
+
+    Ok(stock)
 }

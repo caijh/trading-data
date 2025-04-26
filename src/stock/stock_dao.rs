@@ -21,3 +21,11 @@ pub async fn delete_stocks_by_exchange_stock_kind(
         .exec(&dao.connection)
         .await
 }
+
+pub async fn get_stock_by_code(code: &str) -> Result<Option<stock_model::Model>, DbErr> {
+    let application_context = APPLICATION_CONTEXT.read().await;
+    let dao = application_context.get_bean_factory().get::<Dao>();
+    stock_model::Entity::find_by_id(code)
+        .one(&dao.connection)
+        .await
+}
