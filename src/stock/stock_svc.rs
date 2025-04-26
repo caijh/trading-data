@@ -25,10 +25,25 @@ use std::ops::Not;
 use std::str::FromStr;
 use tracing::info;
 
+/// 异步同步指定交易所的证券和基金信息
+///
+/// # Arguments
+/// * `exchange` - 一个字符串切片，表示要同步的交易所名称
+///
+/// # Returns
+/// * `Result<(), Box<dyn Error>>` - 返回一个结果类型，表示操作成功或携带一个错误类型
+///
+/// # Remarks
+/// 该函数首先会根据传入的交易所名称创建一个Exchange实例，然后同步该交易所的股票和基金信息
 pub async fn sync(exchange: &str) -> Result<(), Box<dyn Error>> {
     let exchange = Exchange::from_str(exchange)?;
+
+    // 同步股票信息
     sync_stocks(&exchange).await?;
+
+    // 同步基金信息
     sync_funds(&exchange).await?;
+
     Ok(())
 }
 
