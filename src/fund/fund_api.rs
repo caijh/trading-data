@@ -1,5 +1,5 @@
 use crate::exchange::exchange_model::Exchange;
-use crate::stock::stock_model::Model as Stock;
+use crate::stock::stock_model::{Model as Stock, StockKind};
 use async_trait::async_trait;
 use calamine::{Reader, Xlsx, open_workbook};
 use rand::{Rng, rng};
@@ -46,37 +46,51 @@ impl FundApi for Exchange {
                     stock_code: "7300".to_string(),
                 },
             ]),
-            Exchange::NASDAQ => Ok(vec![
-                Stock {
-                    code: "QQQ.NS".to_string(),
-                    name: "QQQ".to_string(),
-                    exchange: "NASDAQ".to_string(),
-                    stock_type: "Fund".to_string(),
-                    stock_code: "QQQ".to_string(),
-                },
-                Stock {
-                    code: "PSQ.NS".to_string(),
-                    name: "PSQ".to_string(),
-                    exchange: "NASDAQ".to_string(),
-                    stock_type: "Fund".to_string(),
-                    stock_code: "PSQ".to_string(),
-                },
-                Stock {
-                    code: "SPY.NS".to_string(),
-                    name: "SPY".to_string(),
-                    exchange: "NASDAQ".to_string(),
-                    stock_type: "Fund".to_string(),
-                    stock_code: "SPY".to_string(),
-                },
-                Stock {
-                    code: "SH.NS".to_string(),
-                    name: "SH".to_string(),
-                    exchange: "NASDAQ".to_string(),
-                    stock_type: "Fund".to_string(),
-                    stock_code: "SH".to_string(),
-                },
-            ]),
+            Exchange::NASDAQ => get_funds_from_nasdaq(self).await,
         }
+    }
+}
+
+async fn get_funds_from_nasdaq(exchange: &Exchange) -> Result<Vec<Stock>, Box<dyn Error>> {
+    let url = "https://api.nasdaq.com/api/screener/etf?download=true".to_string();
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36".parse().unwrap());
+    headers.insert("Accept", "*/*".parse().unwrap());
+    headers.insert("Connection", "keep-alive".parse().unwrap());
+    headers.insert("Accept-Encoding", "gzip, deflate, br".parse().unwrap());
+    headers.insert("Accept-Language", "en-US,en;q=0.9".parse().unwrap());
+    let client = reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap();
+    let response = client.get(url).headers(headers).send().await;
+    match response {
+        Ok(response) => {
+            let json: Value = response.json().await?;
+            let data = json
+                .get("data")
+                .unwrap()
+                .get("data")
+                .unwrap()
+                .get("rows")
+                .unwrap()
+                .as_array();
+            let mut funds = Vec::new();
+            if let Some(data) = data {
+                for fund in data {
+                    let symbol = fund.get("symbol").unwrap().as_str().unwrap();
+                    funds.push(Stock {
+                        code: format!("{}{}", symbol, exchange.stock_code_suffix()),
+                        name: symbol.to_string(),
+                        exchange: exchange.as_ref().to_string(),
+                        stock_type: StockKind::Fund.to_string(),
+                        stock_code: symbol.to_string(),
+                    });
+                }
+            }
+            Ok(funds)
+        }
+        Err(e) => Err(e.into()),
     }
 }
 
