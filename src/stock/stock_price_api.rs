@@ -630,7 +630,7 @@ fn cal_value(val: &str, unit: &str) -> BigDecimal {
     val * unit
 }
 
-fn remove_jquery_wrapping_fn_call(data: &str) -> Value {
+pub fn remove_jquery_wrapping_fn_call(data: &str) -> Value {
     // Remove the wrapping function call
     if let Some(start_idx) = data.find('(') {
         if let Some(end_idx) = data.rfind(')') {

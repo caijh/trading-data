@@ -1,7 +1,11 @@
 use crate::exchange::exchange_model::Exchange;
-use crate::stock::stock_model::{Model as Stock, StockKind};
+use crate::stock::stock_model::{Model as Stock, Model, StockKind};
+use crate::token::token_svc;
+use application_context::context::application_context::APPLICATION_CONTEXT;
+use application_core::env::property_resolver::PropertyResolver;
 use async_trait::async_trait;
 use calamine::{Reader, Xlsx, open_workbook};
+use chrono::Local;
 use rand::{Rng, rng};
 use serde_json::Value;
 use std::error::Error;
@@ -19,36 +23,69 @@ impl FundApi for Exchange {
     async fn get_funds(&self) -> Result<Vec<Stock>, Box<dyn Error>> {
         match self {
             Exchange::SSE => get_funds_from_sse(self).await,
-            Exchange::SZSE => {
-                let url = format!(
-                    "http://www.szse.cn/api/report/ShowReport?SHOWTYPE=xlsx&CATALOGID=1105&TABKEY=tab1&random={}",
-                    rng().random::<f64>()
-                );
-                let dir = tempdir()?;
-                let path_buf = dir.path().join("sz_funds.xlsx");
-                Request::download(&url, path_buf.as_path()).await?;
-                let stocks = read_funds_from_sz_excel(path_buf.as_path(), self)?;
-                Ok(stocks)
-            }
-            Exchange::HKEX => Ok(vec![
-                Stock {
-                    code: "2800.HK".to_string(),
-                    name: "盈富基金".to_string(),
-                    exchange: "HKEX".to_string(),
-                    stock_type: "Fund".to_string(),
-                    stock_code: "2800".to_string(),
-                },
-                Stock {
-                    code: "7300.HK".to_string(),
-                    name: "恒生一倍看空".to_string(),
-                    exchange: "HKEX".to_string(),
-                    stock_type: "Fund".to_string(),
-                    stock_code: "7300".to_string(),
-                },
-            ]),
+            Exchange::SZSE => get_funds_from_szse(self).await,
+            Exchange::HKEX => get_funds_from_hkex(self).await,
             Exchange::NASDAQ => get_funds_from_nasdaq(self).await,
         }
     }
+}
+
+async fn get_funds_from_szse(exchange: &Exchange) -> Result<Vec<Model>, Box<dyn Error>> {
+    let url = format!(
+        "http://www.szse.cn/api/report/ShowReport?SHOWTYPE=xlsx&CATALOGID=1105&TABKEY=tab1&random={}",
+        rng().random::<f64>()
+    );
+    let dir = tempdir()?;
+    let path_buf = dir.path().join("sz_funds.xlsx");
+    Request::download(&url, path_buf.as_path()).await?;
+    let stocks = read_funds_from_sz_excel(path_buf.as_path(), exchange)?;
+    Ok(stocks)
+}
+
+async fn get_funds_from_hkex(exchange: &Exchange) -> Result<Vec<Stock>, Box<dyn Error>> {
+    let subcat_list = vec!["7", "9"]; // 交易所买卖基金，反向基金
+    let mut funds = Vec::new();
+    for subcat in subcat_list {
+        let stocks = get_funds_from_hkex_subcat(exchange, subcat).await?;
+        funds.extend(stocks);
+    }
+    Ok(funds)
+}
+
+async fn get_funds_from_hkex_subcat(
+    exchange: &Exchange,
+    subcat: &str,
+) -> Result<Vec<Stock>, Box<dyn Error>> {
+    let application_context = APPLICATION_CONTEXT.read().await;
+    let environment = application_context.get_environment().await;
+    let base_url = environment
+        .get_property::<String>("stock.api.hk.baseurl")
+        .unwrap();
+    let token = token_svc::get_hkex_token().await;
+    let timestamp = Local::now().timestamp_millis();
+    let url = format!(
+        "{}/hkexwidget/data/getetpfilter?lang=chi&token={}&subcat={}&sort=2&order=0&all=1&qid={}&callback=jQuery_{}&_={}",
+        base_url, token, subcat, timestamp, timestamp, timestamp,
+    );
+    let client = Request::client().await;
+    let response = client.get(url).send().await?;
+    let text = response.text().await?;
+    let json = crate::stock::stock_price_api::remove_jquery_wrapping_fn_call(&text);
+    let data = json.get("data").unwrap();
+    let data = data.get("stocklist").unwrap().as_array();
+    let data = data.unwrap();
+    let mut funds = Vec::new();
+    for stock in data {
+        let code = stock.get("sym").unwrap().as_str().unwrap();
+        funds.push(Stock {
+            code: format!("{}{}", code, exchange.stock_code_suffix()),
+            name: stock.get("nm").unwrap().as_str().unwrap().to_string(),
+            exchange: exchange.as_ref().to_string(),
+            stock_type: StockKind::Fund.to_string(),
+            stock_code: code.to_string(),
+        })
+    }
+    Ok(funds)
 }
 
 async fn get_funds_from_nasdaq(exchange: &Exchange) -> Result<Vec<Stock>, Box<dyn Error>> {
