@@ -16,11 +16,3 @@ insert into stock(code, name, exchange, stock_type, stock_code)
 values ('NDX.NS', '纳斯达克指数', 'NASDAQ', 'Index', 'NDX');
 insert into stock(code, name, exchange, stock_type, stock_code)
 values ('SPX.NS', '标普500指数', 'NASDAQ', 'Index', 'SPX');
-insert into stock(code, name, exchange, stock_type, stock_code)
-values ('QQQ.NS', 'QQQ', 'NASDAQ', 'Fund', 'QQQ');
-insert into stock(code, name, exchange, stock_type, stock_code)
-values ('PSQ.NS', 'ProShares Short QQQ', 'NASDAQ', 'Fund', 'PSQ');
-insert into stock(code, name, exchange, stock_type, stock_code)
-values ('SPY.NS', 'SPY', 'NASDAQ', 'Fund', 'SPY');
-insert into stock(code, name, exchange, stock_type, stock_code)
-values ('7300.HK', '恒生一倍看空', 'HKEX', 'Fund', '7300');
