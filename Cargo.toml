@@ -51,8 +51,3 @@ scraper = "0.23.1"
 default = ["signal"]
 signal = ["tokio-cron-scheduler/signal"]
 
-[patch.crates-io]
-zip = { git = "https://github.com/zip-rs/zip2", rev = "77cde6a" }
-
-[patch.'https://github.com/zip-rs/zip2']
-zip = { git = "https://github.com//zip-rs/zip2", rev = "77cde6a" }
