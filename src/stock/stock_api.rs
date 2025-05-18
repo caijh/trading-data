@@ -1,6 +1,6 @@
 use crate::exchange::exchange_model::Exchange;
 use crate::index::index_api::IndexApi;
-use crate::stock::stock_model::Model;
+use crate::stock::stock_model::{Model, StockKind};
 use async_trait::async_trait;
 use calamine::{Reader, Xls, Xlsx, open_workbook};
 use rand::{Rng, rng};
@@ -26,7 +26,8 @@ impl StockApi for Exchange {
                 let url = "http://query.sse.com.cn/sseQuery/commonExcelDd.do?sqlId=COMMON_SSE_CP_GPJCTPZ_GPLB_GP_L&type=inParams&CSRC_CODE=&STOCK_CODE=&REG_PROVINCE=&STOCK_TYPE=1,8&COMPANY_STATUS=2,4,5,7,8";
                 let path = dir.path().join("sh_stocks.xls");
                 download(url, path.as_path()).await?;
-                let stocks = read_stocks_from_sh_excel(path.as_path(), self)?;
+                let path1 = path.as_path();
+                let stocks = read_stocks_from_excel(path1, self, "股票", 0, 2)?;
                 Ok(stocks)
             }
             Exchange::SZSE => {
@@ -37,7 +38,8 @@ impl StockApi for Exchange {
                 );
                 let path = dir.path().join("sz_stocks.xlsx");
                 Request::download(&url, path.as_path()).await?;
-                let stocks = read_stocks_from_sz_excel(path.as_path(), self)?;
+                let path1 = path.as_path();
+                let stocks = read_stocks_from_excel(path1, self, "A股列表", 4, 5)?;
                 Ok(stocks)
             }
             Exchange::HKEX => get_stock_from_hk().await,
@@ -112,53 +114,34 @@ pub async fn download(url: &str, path: &Path) -> Result<(), Box<dyn Error>> {
     }
 }
 
-pub fn read_stocks_from_sh_excel(
+fn read_stocks_from_excel(
     path: &Path,
     exchange: &Exchange,
+    sheet_name: &str,
+    stock_code_index: usize,
+    stock_name_index: usize,
 ) -> Result<Vec<Model>, Box<dyn Error>> {
-    let mut excel_xls: Xls<_> = open_workbook(path)?;
-
+    let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
     let mut stocks = Vec::new();
-    if let Ok(r) = excel_xls.worksheet_range("股票") {
-        for row in r.rows() {
-            if row[0] == "A股代码" {
-                // 跳过标题行
-                continue;
-            }
-            stocks.push(Model {
-                code: format!("{}{}", row[0], exchange.stock_code_suffix()),
-                name: row[2].to_string(),
-                exchange: exchange.as_ref().to_string(),
-                stock_type: "Stock".to_string(),
-                stock_code: row[0].to_string(),
-            });
+    let data = if ext == "xls" {
+        let mut excel_xls: Xls<_> = open_workbook(path)?;
+        excel_xls.worksheet_range(sheet_name)?
+    } else {
+        let mut excel_xlsx: Xlsx<_> = open_workbook(path)?;
+        excel_xlsx.worksheet_range(sheet_name)?
+    };
+
+    for (i, row) in data.rows().enumerate() {
+        if i == 0 {
+            continue;
         }
+        stocks.push(Model {
+            code: format!("{}{}", row[stock_code_index], exchange.stock_code_suffix()),
+            name: row[stock_name_index].to_string(),
+            exchange: exchange.as_ref().to_string(),
+            stock_type: StockKind::Stock.to_string(),
+            stock_code: row[stock_code_index].to_string(),
+        });
     }
-
-    Ok(stocks)
-}
-pub fn read_stocks_from_sz_excel(
-    path: &Path,
-    exchange: &Exchange,
-) -> Result<Vec<Model>, Box<dyn Error>> {
-    let mut excel_xlsx: Xlsx<_> = open_workbook(path)?;
-
-    let mut stocks = Vec::new();
-    if let Ok(r) = excel_xlsx.worksheet_range("A股列表") {
-        for row in r.rows() {
-            if row[0] == "板块" {
-                // 跳过标题行
-                continue;
-            }
-            stocks.push(Model {
-                code: format!("{}{}", row[4], exchange.stock_code_suffix()),
-                name: row[5].to_string(),
-                exchange: exchange.as_ref().to_string(),
-                stock_type: "Stock".to_string(),
-                stock_code: row[4].to_string(),
-            });
-        }
-    }
-
     Ok(stocks)
 }
