@@ -74,11 +74,11 @@ async fn get_current_price_from_sse(code: &str) -> Result<StockPriceDTO, Box<dyn
         h: snap.get(3).unwrap().to_string(),
         l: snap.get(4).unwrap().to_string(),
         o: snap.get(2).unwrap().to_string(),
-        pc: snap.get(7).unwrap().to_string(),
+        pc: snap.get(6).unwrap().to_string(),
         p: snap.get(5).unwrap().to_string(),
-        cje: snap.get(10).unwrap().to_string(),
-        ud: snap.get(8).unwrap().to_string(),
-        v: snap.get(9).unwrap().to_string(),
+        cje: snap.get(9).unwrap().to_string(),
+        ud: snap.get(7).unwrap().to_string(),
+        v: snap.get(8).unwrap().to_string(),
         yc: snap.get(1).unwrap().to_string(),
         t: NaiveDateTime::parse_from_str(&format!("{}{}", date, time), "%Y%m%d%H%M%S")
             .unwrap()
