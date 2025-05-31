@@ -21,7 +21,3 @@ baseurl = "https://www1.hkex.com.hk"
 [stock.api.nasdaq]
 baseurl = "https://api.nasdaq.com"
 charting = "https://charting.nasdaq.com"
-
-[notification]
-url = "https://message.joinspace.pp.ua"
-receiver = ""
