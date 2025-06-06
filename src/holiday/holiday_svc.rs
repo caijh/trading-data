@@ -1,11 +1,9 @@
 use crate::exchange::exchange_model::Exchange;
 use crate::holiday::holiday_api::HolidayApi;
-use crate::holiday::{holiday_dao, holiday_model};
-use application_beans::factory::bean_factory::BeanFactory;
-use application_context::context::application_context::APPLICATION_CONTEXT;
+use crate::holiday::holiday_dao;
+use crate::holiday::holiday_model::ActiveModel;
 use chrono::{DateTime, Datelike, Local};
-use database_mysql_seaorm::Dao;
-use sea_orm::{EntityTrait, Set};
+use sea_orm::Set;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::str::FromStr;
@@ -50,7 +48,7 @@ pub async fn sync_holidays() -> Result<(), Box<dyn Error>> {
         if let Ok(vec) = result {
             vec.iter().for_each(|date| {
                 if !dates.contains(&date.id) {
-                    holidays.push(holiday_model::ActiveModel {
+                    holidays.push(ActiveModel {
                         id: Set(date.id),
                         year: Set(date.year),
                         month: Set(date.month),
@@ -64,11 +62,6 @@ pub async fn sync_holidays() -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
 
-    let application_context = APPLICATION_CONTEXT.read().await;
-    let dao = application_context.get_bean_factory().get::<Dao>();
-    holiday_model::Entity::insert_many(holidays)
-        .on_empty_do_nothing()
-        .exec(&dao.connection)
-        .await?;
+    holiday_dao::save_holidays(holidays).await?;
     Ok(())
 }

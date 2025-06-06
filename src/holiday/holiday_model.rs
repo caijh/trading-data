@@ -18,3 +18,12 @@ pub struct Model {
 pub enum Relation {}
 
 impl ActiveModelBehavior for ActiveModel {}
+
+pub fn create_holiday_model(id: u64, year: u16, month: u8, day: u8) -> Model {
+    Model {
+        id,
+        year,
+        month,
+        day,
+    }
+}

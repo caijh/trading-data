@@ -1,12 +1,12 @@
 use crate::exchange::exchange_model::Exchange;
-use crate::holiday::holiday_model::Model;
+use crate::holiday::holiday_model::{Model, create_holiday_model};
 use application_context::context::application_context::APPLICATION_CONTEXT;
 use application_core::env::property_resolver::PropertyResolver;
 use async_trait::async_trait;
 use chrono::{DateTime, Datelike, Months, NaiveDate, TimeZone, Utc};
 use chrono_tz::Tz;
 use rand::{Rng, rng};
-use scraper::{Html, Selector};
+use scraper::{ElementRef, Html, Selector};
 use std::error::Error;
 use util::request::Request;
 
@@ -113,12 +113,8 @@ async fn get_holiday_from_nasdaq(exchange: &Exchange) -> Result<Vec<Model>, Box<
     for row in document.select(&row_selector) {
         // Define a selector for the table cells within each row
         let cell_selector = Selector::parse("td").unwrap();
-
         // Collect the text content of each cell
-        let cells: Vec<String> = row
-            .select(&cell_selector)
-            .map(|cell| cell.text().collect::<Vec<_>>().join(" ").trim().to_string())
-            .collect();
+        let cells: Vec<String> = collect_cells(&row, &cell_selector);
 
         let date = cells[1].clone();
         // Define the format to match "May 26"
@@ -133,12 +129,13 @@ async fn get_holiday_from_nasdaq(exchange: &Exchange) -> Result<Vec<Model>, Box<
             &format!("{} %Y", format),
         )?;
         let id = format!("{}{}", parsed_date.format("%Y%m%d"), exchange.int_code());
-        vec.push(Model {
-            id: id.parse::<u64>().unwrap(),
-            year: parsed_date.year() as u16,
-            month: parsed_date.month() as u8,
-            day: parsed_date.day() as u8,
-        });
+        let holiday = create_holiday_model(
+            id.parse::<u64>().unwrap(),
+            parsed_date.year() as u16,
+            parsed_date.month() as u8,
+            parsed_date.day() as u8,
+        );
+        vec.push(holiday);
     }
 
     Ok(vec)
@@ -159,11 +156,7 @@ async fn get_holiday_from_gov_hk(exchange: &Exchange) -> Result<Vec<Model>, Box<
     let mut vec = Vec::new();
     for row in document.select(&row_selector) {
         let cell_selector = Selector::parse("td").unwrap();
-
-        let cells: Vec<String> = row
-            .select(&cell_selector)
-            .map(|cell| cell.text().collect::<Vec<_>>().join(" ").trim().to_string())
-            .collect();
+        let cells = collect_cells(&row, &cell_selector);
 
         let date = cells[1].clone();
         if date.is_empty() {
@@ -174,13 +167,22 @@ async fn get_holiday_from_gov_hk(exchange: &Exchange) -> Result<Vec<Model>, Box<
         let parsed_date =
             NaiveDate::parse_from_str(&format!("{}年{}", year, date), &format!("%Y年{}", format))?;
         let id = format!("{}{}", parsed_date.format("%Y%m%d"), exchange.int_code());
-        vec.push(Model {
-            id: id.parse::<u64>().unwrap(),
-            year: parsed_date.year() as u16,
-            month: parsed_date.month() as u8,
-            day: parsed_date.day() as u8,
-        });
+        let holiday = create_holiday_model(
+            id.parse::<u64>().unwrap(),
+            parsed_date.year() as u16,
+            parsed_date.month() as u8,
+            parsed_date.day() as u8,
+        );
+        vec.push(holiday);
     }
 
     Ok(vec)
+}
+
+fn collect_cells(row: &ElementRef, cell_selector: &Selector) -> Vec<String> {
+    let cells: Vec<String> = row
+        .select(&cell_selector)
+        .map(|cell| cell.text().collect::<Vec<_>>().join(" ").trim().to_string())
+        .collect();
+    cells
 }
