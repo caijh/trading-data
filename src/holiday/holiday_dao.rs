@@ -2,7 +2,7 @@ use crate::exchange::exchange_model::Exchange;
 use crate::holiday::holiday_model;
 use crate::holiday::holiday_model::{ActiveModel, Model};
 use application_beans::factory::bean_factory::BeanFactory;
-use application_context::context::application_context::{APPLICATION_CONTEXT, ApplicationContext};
+use application_context::context::application_context::APPLICATION_CONTEXT;
 use chrono::{DateTime, Local};
 use database_mysql_seaorm::Dao;
 use sea_orm::{DbErr, EntityTrait};
