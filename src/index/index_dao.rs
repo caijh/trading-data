@@ -8,15 +8,13 @@ use sea_orm::EntityTrait;
 use sea_orm::QueryFilter;
 use sea_orm::{ColumnTrait, DbErr};
 
-pub async fn find_all() -> Result<Vec<index_model::Model>, sea_orm::DbErr> {
+pub async fn find_all() -> Result<Vec<Model>, DbErr> {
     let application_context = APPLICATION_CONTEXT.read().await;
     let dao = application_context.get_bean_factory().get::<Dao>();
     index_model::Entity::find().all(&dao.connection).await
 }
 
-pub async fn find_by_exchange(
-    exchange: &Exchange,
-) -> Result<Vec<index_model::Model>, sea_orm::DbErr> {
+pub async fn find_by_exchange(exchange: &Exchange) -> Result<Vec<Model>, DbErr> {
     let application_context = APPLICATION_CONTEXT.read().await;
     let dao = application_context.get_bean_factory().get::<Dao>();
     index_model::Entity::find()
