@@ -332,11 +332,6 @@ pub async fn get_stock_price(code: &str) -> Result<StockPrice, Box<dyn Error>> {
             Some(BigDecimal::from_str(&price_dto.o).unwrap())
         },
         close: BigDecimal::from_str(&price_dto.p).unwrap(),
-        amount: if price_dto.cje.is_empty() {
-            None
-        } else {
-            Some(BigDecimal::from_str(&price_dto.cje).unwrap())
-        },
         volume: if price_dto.v.is_empty() {
             None
         } else {

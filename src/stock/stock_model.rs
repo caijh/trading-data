@@ -42,7 +42,6 @@ pub struct StockPrice {
     pub low: Option<BigDecimal>,
     pub high: Option<BigDecimal>,
     pub volume: Option<BigDecimal>,
-    pub amount: Option<BigDecimal>,
     pub time: String,
 }
 
