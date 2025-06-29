@@ -1,5 +1,5 @@
-/target
-Cargo.lock
-.idea
-.env
+target/
+.idea/
 logs/
+.env
+Cargo.lock
