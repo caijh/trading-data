@@ -22,8 +22,6 @@ pub struct Model {
     pub low: BigDecimal,
     /// 当日成交量，可能为空
     pub volume: Option<BigDecimal>,
-    /// 当日成交金额，可能为空
-    pub amount: Option<BigDecimal>,
 }
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {}

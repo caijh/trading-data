@@ -48,11 +48,6 @@ create table stock.stock_daily_price
     high   decimal(10, 3)  null,
     low    decimal(10, 3)  null,
     volume decimal(18, 2)  null,
-    amount decimal(18, 2)  null,
-    zf     decimal(10, 2)  null,
-    hs     decimal(10, 2)  null,
-    zd     decimal(10, 2)  null,
-    zde    decimal(10, 2)  null,
     primary key (code, date)
 )
     comment '股票每日行情数据';

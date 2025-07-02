@@ -254,11 +254,6 @@ fn create_stock_daily_price(code: &str, dto: &StockDailyPriceDTO) -> StockDailyP
         high: BigDecimal::from_str(&dto.h).unwrap(),
         low: BigDecimal::from_str(&dto.l).unwrap(),
         volume: Some(BigDecimal::from_str(&dto.v).unwrap()),
-        amount: if dto.e.is_empty() {
-            None
-        } else {
-            Some(BigDecimal::from_str(&dto.e).unwrap())
-        },
     }
 }
 
