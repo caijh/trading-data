@@ -216,7 +216,10 @@ pub async fn sync_stock_daily_price(code: &str) -> Result<(), Box<dyn Error>> {
                 new_prices.push(daily_price.clone().into_active_model());
             }
 
-            if stock.exchange == "HK" && last_price.is_some() && last_price.unwrap().date == d {
+            if stock.exchange == Exchange::HKEX.as_ref()
+                && last_price.is_some()
+                && last_price.unwrap().date == d
+            {
                 // 港交所今天的数据，要到明天才更新
                 let price = daily_price.clone().into_active_model();
                 price.update(&dao.connection).await?;
