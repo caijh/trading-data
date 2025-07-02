@@ -38,7 +38,7 @@ impl StockPriceApi for Exchange {
                 if stock.stock_type == "Index" {
                     get_current_index_price_from_hk(self, &stock.stock_code).await
                 } else {
-                    get_current_stock_price_from_hk(&stock.stock_code).await
+                    get_current_stock_price_from_hk(self, &stock.stock_code).await
                 }
             }
             Exchange::NASDAQ => get_current_price_from_nasdaq(stock).await,
@@ -401,14 +401,19 @@ pub struct StockPriceDTO {
     pub t: String,
 }
 
-async fn get_current_stock_price_from_hk(code: &str) -> Result<StockPriceDTO, Box<dyn Error>> {
+async fn get_current_stock_price_from_hk(
+    exchange: &Exchange,
+    code: &str,
+) -> Result<StockPriceDTO, Box<dyn Error>> {
     let application_context = APPLICATION_CONTEXT.read().await;
     let environment = application_context.get_environment().await;
     let base_url = environment
         .get_property::<String>("stock.api.hk.baseurl")
         .unwrap();
     let token = token_svc::get_hkex_token().await;
-    let timestamp = Local::now().timestamp_millis();
+    let timestamp = Utc::now()
+        .with_timezone(&exchange.time_zone())
+        .timestamp_millis();
     let url = format!(
         "{}/hkexwidget/data/getequityquote?sym={}&token={}&lang=chi&qid={}&callback=jQuery_{}&_={}",
         base_url, code, token, timestamp, timestamp, timestamp,
