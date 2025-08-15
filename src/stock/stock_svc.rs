@@ -59,6 +59,9 @@ pub async fn sync(exchange: &str) -> Result<(), Box<dyn Error>> {
 /// 如果操作成功，返回 `Ok(())`；如果发生错误，返回一个实现了 `Error` trait 的类型。
 pub async fn sync_stocks(exchange: &Exchange) -> Result<(), Box<dyn Error>> {
     let stocks = exchange.get_stocks().await?;
+    if stocks.is_empty() {
+        return Ok(());
+    }
 
     // 删除现有的股票信息，为保存最新的股票信息做准备
     delete_stocks(exchange).await?;
@@ -71,6 +74,9 @@ pub async fn sync_stocks(exchange: &Exchange) -> Result<(), Box<dyn Error>> {
 
 pub async fn sync_funds(exchange: &Exchange) -> Result<(), Box<dyn Error>> {
     let stocks = exchange.get_funds().await?;
+    if stocks.is_empty() {
+        return Ok(());
+    }
     delete_funds(exchange).await?;
     save_stocks(&stocks).await?;
     save_funds(&stocks).await?;
