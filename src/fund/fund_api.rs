@@ -89,7 +89,7 @@ async fn get_funds_from_hkex_subcat(
 }
 
 async fn get_funds_from_nasdaq(exchange: &Exchange) -> Result<Vec<Stock>, Box<dyn Error>> {
-    let url = "https://api.nasdaq.com/api/screener/etf?download=true".to_string();
+    let url = "https://api.nasdaq.com/api/screener/etf?download=true&assetclass=equity".to_string();
     let mut headers = reqwest::header::HeaderMap::new();
     headers.insert("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36".parse().unwrap());
     headers.insert("Accept", "*/*".parse().unwrap());
