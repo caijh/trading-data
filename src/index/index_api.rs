@@ -5,6 +5,8 @@ use calamine::Reader;
 use calamine::Xls;
 use calamine::open_workbook;
 use rand::Rng;
+use reqwest::Client;
+use scraper::{Html, Selector};
 use serde_json::Value;
 use std::error::Error;
 use std::fs::File;
@@ -45,7 +47,13 @@ impl IndexApi for Exchange {
                 Ok(stocks)
             }
             Exchange::HKEX => get_index_stock_from_hkex(index_code, self).await,
-            Exchange::NASDAQ => get_stocks_from_nasdaq(index_code, self).await,
+            Exchange::NASDAQ => {
+                if index_code == "SPX" {
+                    get_spx_stocks_from_wikipedia(self).await
+                } else {
+                    get_stocks_from_nasdaq(index_code, self).await
+                }
+            }
         }
     }
 }
@@ -144,6 +152,43 @@ async fn get_stocks_from_nasdaq(
     Ok(stocks)
 }
 
+async fn get_spx_stocks_from_wikipedia(exchange: &Exchange) -> Result<Vec<Stock>, Box<dyn Error>> {
+    let url = "https://en.wikipedia.org/wiki/List_of_S&P_500_companies";
+    let client = Client::new();
+    let resp = client.get(url).send().await?.text().await?;
+
+    let document = Html::parse_document(&resp);
+    // Wikipedia 表格选择器
+    let table_selector = Selector::parse("table.wikitable").unwrap();
+    let row_selector = Selector::parse("tr").unwrap();
+    let cell_selector = Selector::parse("td").unwrap();
+
+    // 找到第一个 table（就是 S&P500 成分股列表）
+    let table = document
+        .select(&table_selector)
+        .next()
+        .ok_or("No table found")?;
+    let mut stocks = Vec::new();
+
+    for row in table.select(&row_selector).skip(1) {
+        let mut cells = row.select(&cell_selector);
+        if let (Some(symbol_cell), Some(name_cell)) = (cells.next(), cells.next()) {
+            let code = symbol_cell.text().collect::<String>().trim().to_string();
+            let name = name_cell.text().collect::<String>().trim().to_string();
+
+            let stock = Stock {
+                code: format!("{}{}", code, exchange.stock_code_suffix()),
+                name,
+                exchange: exchange.as_ref().to_string(),
+                stock_type: "Stock".to_string(),
+                stock_code: code,
+            };
+            stocks.push(stock);
+        }
+    }
+
+    Ok(stocks)
+}
 async fn download(url: &str, path: &Path) -> Result<(), Box<dyn Error>> {
     let client = reqwest::Client::builder().build().unwrap();
     let response = client.get(url).send().await;

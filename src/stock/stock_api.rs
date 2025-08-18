@@ -43,7 +43,24 @@ impl StockApi for Exchange {
                 Ok(stocks)
             }
             Exchange::HKEX => get_stock_from_hk().await,
-            Exchange::NASDAQ => self.get_index_stocks("nasdaq100").await,
+            Exchange::NASDAQ => {
+                let mut stocks = Vec::new();
+                let nasdaq100_index_stocks = self.get_index_stocks("nasdaq100").await?;
+                let spx500_index_stocks = self.get_index_stocks("SPX").await?;
+                let mut stock_codes = Vec::new();
+                let mut add_unique_stocks = |index_stocks: Vec<Model>| {
+                    for stock in index_stocks {
+                        if !stock_codes.contains(&stock.code) {
+                            stock_codes.push(stock.code.clone());
+                            stocks.push(stock);
+                        }
+                    }
+                };
+
+                add_unique_stocks(nasdaq100_index_stocks);
+                add_unique_stocks(spx500_index_stocks);
+                Ok(stocks)
+            }
         }
     }
 }
