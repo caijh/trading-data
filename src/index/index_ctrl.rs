@@ -85,11 +85,18 @@ pub async fn sync_all() -> impl IntoResponse {
     RespBody::<()>::success_info("Sync index Stocks in background")
 }
 
+#[derive(Serialize, Deserialize)]
+struct IndexStockPriceSyncParams {
+    code: Option<String>,
+}
+
 /// 同步所有指数中股票的价格
 #[get("/index/sync/price")]
-pub async fn sync_index_stock_price() -> impl IntoResponse {
+pub async fn sync_index_stock_price(
+    Query(params): Query<IndexStockPriceSyncParams>,
+) -> impl IntoResponse {
     spawn(async {
-        let job = SyncAllIndexStockPriceJob;
+        let job = SyncAllIndexStockPriceJob { code: params.code };
 
         job.run().await;
     });

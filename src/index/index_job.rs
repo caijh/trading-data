@@ -102,7 +102,9 @@ async fn do_notification_index_stocks_changed(
         }
     }
 }
-pub struct SyncAllIndexStockPriceJob;
+pub struct SyncAllIndexStockPriceJob {
+    pub code: Option<String>,
+}
 
 #[async_trait]
 impl Runnable for SyncAllIndexStockPriceJob {
@@ -120,7 +122,15 @@ impl Runnable for SyncAllIndexStockPriceJob {
                 con.set_ex::<&str, &str, String>(&key, "doing", 3600)
                     .unwrap();
                 info!("SyncAllIndexStockPriceJob run ...");
-                let indexes = find_all_stock_index().await.unwrap();
+                let mut indexes = find_all_stock_index().await.unwrap();
+                if self.code.is_some() {
+                    // filter indexes use  code
+                    let code = self.code.as_ref().unwrap();
+                    indexes = indexes
+                        .into_iter()
+                        .filter(|index| index.code == *code)
+                        .collect::<Vec<_>>();
+                }
                 for index in indexes {
                     let _ = sync_constituent_stocks_daily_price(&index.code).await;
                 }
