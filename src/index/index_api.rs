@@ -5,7 +5,6 @@ use calamine::Reader;
 use calamine::Xls;
 use calamine::open_workbook;
 use rand::Rng;
-use reqwest::Client;
 use scraper::{Html, Selector};
 use serde_json::Value;
 use std::error::Error;
@@ -154,9 +153,24 @@ async fn get_stocks_from_nasdaq(
 
 async fn get_spx_stocks_from_wikipedia(exchange: &Exchange) -> Result<Vec<Stock>, Box<dyn Error>> {
     let url = "https://en.wikipedia.org/wiki/List_of_S&P_500_companies";
-    let client = Client::new();
-    let resp = client.get(url).send().await?.text().await?;
-
+    info!("Query Index Stocks from url = {}", url);
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36".parse().unwrap());
+    headers.insert("Accept", "*/*".parse().unwrap());
+    headers.insert("Connection", "keep-alive".parse().unwrap());
+    headers.insert("Accept-Encoding", "gzip, deflate, br".parse().unwrap());
+    headers.insert("Accept-Language", "en-US,en;q=0.9".parse().unwrap());
+    let client = reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap();
+    let resp = client
+        .get(url)
+        .headers(headers)
+        .send()
+        .await?
+        .text()
+        .await?;
     let document = Html::parse_document(&resp);
     // Wikipedia 表格选择器
     let table_selector = Selector::parse("table.wikitable").unwrap();
