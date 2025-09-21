@@ -254,6 +254,9 @@ pub async fn get_stock_daily_price(
                     if o.is_null() {
                         continue;
                     }
+                    if o.as_f64().unwrap() < 0.0 {
+                        continue;
+                    }
                     let o = o.as_number().unwrap().to_string();
                     let dt: DateTime<Utc> =
                         DateTime::from_timestamp_millis(k.first().unwrap().as_i64().unwrap())
