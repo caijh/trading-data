@@ -640,11 +640,11 @@ fn cal_value(val: &str, unit: &str) -> BigDecimal {
 
 pub fn remove_jquery_wrapping_fn_call(data: &str) -> Value {
     // Remove the wrapping function call
-    if let Some(start_idx) = data.find('(') {
-        if let Some(end_idx) = data.rfind(')') {
-            let json_str = &data[start_idx + 1..end_idx]; // Extract JSON string
-            // Parse the JSON string
-            serde_json::from_str::<Value>(json_str).unwrap()
+    if let (Some(start_idx), Some(end_idx)) = (data.find('('), data.rfind(')')) {
+        if end_idx > start_idx {
+            let json_str = &data[start_idx + 1..end_idx];
+            serde_json::from_str::<Value>(json_str)
+                .unwrap_or_else(|_| serde_json::from_str::<Value>(data).unwrap())
         } else {
             serde_json::from_str::<Value>(data).unwrap()
         }
