@@ -36,8 +36,7 @@ async fn get_market_status(exchange: &str) -> Result<String, Box<dyn Error>> {
         return Ok("MarketTrading".to_string());
     }
 
-    let tz = exchange.time_zone();
-    let time = Utc::now().with_timezone(&tz).time();
+    let time = date.time();
     let first = market_times.first().unwrap();
     if time < first.start_time {
         return Ok("MarketClosed".to_string());
@@ -96,7 +95,7 @@ pub async fn get_exchange_market_status_cache(exchange: &str) -> Result<String, 
         "MarketStatus",
         &key,
         &market_status,
-        Duration::from_secs(300),
+        Duration::from_secs(120),
     )
     .await;
     Ok(market_status)
