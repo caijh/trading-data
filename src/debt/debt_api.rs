@@ -1,11 +1,27 @@
 use crate::debt::debt_model::DebtPrice;
+use crate::exchange::exchange_model::Exchange;
 use application_context::context::application_context::APPLICATION_CONTEXT;
 use application_core::env::property_resolver::PropertyResolver;
+use async_trait::async_trait;
 use chrono::{Local, NaiveDateTime};
 use serde_json::Value;
 use std::error::Error;
 use util::request::Request;
 
+#[async_trait]
+pub trait DebtApi {
+    async fn get_debt_price(&self, code: &str) -> Result<DebtPrice, Box<dyn Error>>;
+}
+
+#[async_trait]
+impl DebtApi for Exchange {
+    async fn get_debt_price(&self, code: &str) -> Result<DebtPrice, Box<dyn Error>> {
+        match self {
+            Exchange::SSE => get_debt_price(code).await,
+            _ => Err("暂不支持该交易所".into()),
+        }
+    }
+}
 pub async fn get_debt_price(code: &str) -> Result<DebtPrice, Box<dyn Error>> {
     let application_context = APPLICATION_CONTEXT.read().await;
     let environment = application_context.get_environment().await;
