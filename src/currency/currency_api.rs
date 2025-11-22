@@ -1,11 +1,27 @@
-use std::error::Error;
-use std::str::FromStr;
-
+use async_trait::async_trait;
 use bigdecimal::BigDecimal;
 use serde_json::Value;
+use std::error::Error;
+use std::str::FromStr;
 use util::request::Request;
 
 use crate::currency::currency_model::CurrencyRate;
+use crate::exchange::exchange_model::Exchange;
+
+#[async_trait]
+pub trait CurrencyApi {
+    async fn get_rate(self) -> Result<Vec<CurrencyRate>, Box<dyn Error>>;
+}
+
+#[async_trait]
+impl CurrencyApi for Exchange {
+    async fn get_rate(self) -> Result<Vec<CurrencyRate>, Box<dyn Error>> {
+        match self {
+            Exchange::SSE | Exchange::SZSE => get_rate().await,
+            _ => Ok(vec![]),
+        }
+    }
+}
 
 pub async fn get_rate() -> Result<Vec<CurrencyRate>, Box<dyn Error>> {
     let response = Request::get_response("https://fx.cmbchina.com/api/v1/fx/rate").await?;
