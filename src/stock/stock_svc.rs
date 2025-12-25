@@ -1,4 +1,5 @@
 use crate::exchange::exchange_model::Exchange;
+use crate::exchange::exchange_svc;
 use crate::fund::fund_api::FundApi;
 use crate::fund::{fund_dao, fund_model};
 use crate::holiday::holiday_svc::today_is_holiday;
@@ -147,23 +148,22 @@ pub async fn delete_funds(exchange: &Exchange) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-pub async fn get_stock_daily_price(
-    code: &str,
-    use_cache: bool,
-) -> Result<Vec<StockDailyPrice>, Box<dyn Error>> {
+pub async fn get_stock_daily_price(code: &str) -> Result<Vec<StockDailyPrice>, Box<dyn Error>> {
     info!("Get stock daily price, code = {}", code);
     let stock = get_stock(code).await?;
-    let mut daily_prices: Vec<StockDailyPrice> = if use_cache {
-        stock_cache::get_stock_daily_price(&stock).await?
-    } else {
-        Vec::new()
-    };
+    let mut daily_prices: Vec<StockDailyPrice> =
+        stock_cache::get_stock_daily_prices(&stock).await?;
 
     if daily_prices.is_empty() {
         let prices_dto = stock_price_api::get_stock_daily_price(&stock).await?;
         for dto in prices_dto {
             let daily_price = create_stock_daily_price(code, &dto);
             daily_prices.push(daily_price);
+        }
+        let exchange = Exchange::from_str(stock.exchange.as_str())?;
+        let market_closed = exchange_svc::is_market_closed(&exchange).await?;
+        if market_closed {
+            stock_cache::set_stock_daily_prices(&stock, &daily_prices).await?;
         }
     }
 
