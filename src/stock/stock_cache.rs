@@ -45,33 +45,5 @@ pub async fn get_stock_daily_price(
         return Ok(prices);
     }
 
-    // 缓存未命中，执行同步逻辑
-    let exchange = Exchange::from_str(&stock.exchange)?;
-    let date = Utc::now()
-        .with_timezone(&exchange.time_zone())
-        .format("%Y%m%d")
-        .to_string()
-        .parse::<u64>()
-        .unwrap();
-    let sync_record = sync_record_dao::get_sync_record(stock).await?;
-    let mut updated: bool = false;
-    if let Some(sync_record) = sync_record {
-        updated = sync_record.date == date && sync_record.updated;
-    }
-
-    let prices = if updated {
-        let prices = stock_price_dao::get_stock_prices(stock).await?;
-        let now = Utc::now().with_timezone(&exchange.time_zone());
-        let seconds = 3600 * 24 - now.num_seconds_from_midnight();
-        con.set_ex::<&str, String, String>(
-            &key,
-            serde_json::to_string(&prices).unwrap(),
-            seconds as u64,
-        )?;
-        prices
-    } else {
-        Vec::new()
-    };
-
-    Ok(prices)
+    Ok(Vec::new())
 }
