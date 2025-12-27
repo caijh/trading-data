@@ -33,18 +33,3 @@ async fn stock_daily_price(Query(params): Query<StockParams>) -> impl IntoRespon
     let r = stock_svc::get_stock_daily_price(&params.code).await;
     RespBody::result(&r).response()
 }
-
-/// 同步股票日价格数据
-///
-/// # Arguments
-///
-/// * `Query(params)` - 一个从查询字符串中解析出来的股票参数对象，包含股票代码
-///
-/// # Returns
-///
-/// 返回一个实现了`IntoResponse` trait的对象，用于构建HTTP响应
-#[get("/stock/price/daily/sync")]
-async fn sync_stock_daily_price(Query(params): Query<StockParams>) -> impl IntoResponse {
-    let r = stock_svc::sync_stock_daily_price(&params.code).await;
-    RespBody::result(&r).response()
-}

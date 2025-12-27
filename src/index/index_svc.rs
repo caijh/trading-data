@@ -2,7 +2,6 @@ use crate::exchange::exchange_model::Exchange;
 use crate::index::index_api::IndexApi;
 use crate::index::index_constituent_model::SyncIndexConstituents;
 use crate::index::{index_constituent_model, index_dao, index_model};
-use crate::stock::stock_svc::sync_stock_daily_price;
 use application_beans::factory::bean_factory::BeanFactory;
 use application_context::context::application_context::APPLICATION_CONTEXT;
 use database_mysql_seaorm::Dao;
@@ -100,14 +99,6 @@ pub async fn get_stock_index(index: &str) -> Result<index_model::Model, Box<dyn 
         None => Err("Stock index is not Supported".into()),
         Some(index) => Ok(index),
     }
-}
-
-pub async fn sync_constituent_stocks_daily_price(index: &str) -> Result<(), Box<dyn Error>> {
-    let stocks = get_constituent_stocks(index).await?;
-    for stock in stocks {
-        let _ = sync_stock_daily_price(&stock.stock_code).await;
-    }
-    Ok(())
 }
 
 pub async fn find_all_stock_index() -> Result<Vec<index_model::Model>, Box<dyn Error>> {

@@ -2,22 +2,18 @@ use crate::exchange::exchange_model::Exchange;
 use crate::exchange::exchange_svc;
 use crate::fund::fund_api::FundApi;
 use crate::fund::{fund_dao, fund_model};
-use crate::holiday::holiday_svc::today_is_holiday;
 use crate::stock::stock_api::StockApi;
 use crate::stock::stock_model::{Model as Stock, StockKind, StockPrice};
 use crate::stock::stock_price_api::{StockDailyPriceDTO, StockPriceApi};
 use crate::stock::stock_price_model::Model as StockDailyPrice;
-use crate::stock::{
-    stock_cache, stock_dao, stock_model, stock_price_api, stock_price_dao, stock_price_model,
-    sync_record_model,
-};
+use crate::stock::{stock_cache, stock_dao, stock_model, stock_price_api};
 use application_beans::factory::bean_factory::BeanFactory;
 use application_context::context::application_context::APPLICATION_CONTEXT;
 use bigdecimal::BigDecimal;
-use chrono::Utc;
 use database_mysql_seaorm::Dao;
 use sea_orm::ActiveValue::Set;
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter};
+use sea_orm::EntityTrait;
+use sea_orm::IntoActiveModel;
 use std::error::Error;
 use std::ops::Not;
 use std::str::FromStr;
@@ -170,87 +166,6 @@ pub async fn get_stock_daily_price(code: &str) -> Result<Vec<StockDailyPrice>, B
     Ok(daily_prices)
 }
 
-pub async fn sync_stock_daily_price(code: &str) -> Result<(), Box<dyn Error>> {
-    let stock = get_stock(code).await?;
-    let exchange = Exchange::from_str(&stock.exchange)?;
-    let date = Utc::now()
-        .with_timezone(&exchange.time_zone())
-        .format("%Y%m%d")
-        .to_string()
-        .parse::<u64>()
-        .unwrap();
-    let application_context = APPLICATION_CONTEXT.read().await;
-    let dao = application_context.get_bean_factory().get::<Dao>();
-    let sync_record = sync_record_model::Entity::find_by_id(&stock.code)
-        .one(&dao.connection)
-        .await?;
-    // 判断是否已经同步
-    let mut updated = false;
-    if let Some(sync_record) = sync_record {
-        updated = sync_record.date == date && sync_record.updated;
-    } else {
-        let record = sync_record_model::ActiveModel {
-            code: Set(code.to_string()),
-            date: Set(date),
-            updated: Set(false),
-        };
-        sync_record_model::Entity::insert(record)
-            .on_empty_do_nothing()
-            .exec(&dao.connection)
-            .await?;
-    }
-    info!("Sync stock {} daily price, updated = {}", code, updated);
-    if !updated {
-        // 从数据中获取
-        let prices = stock_price_dao::get_stock_prices(&stock).await?;
-        let last_price = if !prices.is_empty() {
-            prices.last()
-        } else {
-            None
-        };
-        let dates: Vec<u64> = prices.iter().map(|e| e.date).collect();
-        let mut new_prices = Vec::new();
-        let mut price_dates = Vec::new();
-        let prices_dto = stock_price_api::get_stock_daily_price(&stock).await?;
-        for dto in prices_dto {
-            let daily_price = create_stock_daily_price(code, &dto);
-            let d = daily_price.date;
-            price_dates.push(d);
-
-            if !dates.contains(&d) {
-                // 数据库中没有
-                new_prices.push(daily_price.clone().into_active_model());
-            }
-
-            if stock.exchange == Exchange::HKEX.as_ref()
-                && last_price.is_some()
-                && last_price.unwrap().date == d
-            {
-                // 港交所今天的数据，要到明天才更新
-                let price = daily_price.clone().into_active_model();
-                price.update(&dao.connection).await?;
-            }
-        }
-        if !new_prices.is_empty() {
-            stock_price_model::Entity::insert_many(new_prices)
-                .exec(&dao.connection)
-                .await?;
-        }
-        if price_dates.contains(&date) || today_is_holiday(exchange.as_ref()).await? {
-            let record = sync_record_model::ActiveModel {
-                code: Set(code.to_string()),
-                date: Set(date),
-                updated: Set(true),
-            };
-            sync_record_model::Entity::update(record)
-                .filter(sync_record_model::Column::Code.eq(code.to_string()))
-                .exec(&dao.connection)
-                .await?;
-        }
-    }
-    Ok(())
-}
-
 fn create_stock_daily_price(code: &str, dto: &StockDailyPriceDTO) -> StockDailyPrice {
     StockDailyPrice {
         code: code.to_string(),
@@ -273,23 +188,23 @@ pub async fn get_stock_price(code: &str) -> Result<StockPrice, Box<dyn Error>> {
         high: if price_dto.h.is_empty() {
             None
         } else {
-            Some(BigDecimal::from_str(&price_dto.h).unwrap())
+            Some(BigDecimal::from_str(&price_dto.h)?)
         },
         low: if price_dto.l.is_empty() {
             None
         } else {
-            Some(BigDecimal::from_str(&price_dto.l).unwrap())
+            Some(BigDecimal::from_str(&price_dto.l)?)
         },
         open: if price_dto.o.is_empty() {
             None
         } else {
-            Some(BigDecimal::from_str(&price_dto.o).unwrap())
+            Some(BigDecimal::from_str(&price_dto.o)?)
         },
-        close: BigDecimal::from_str(&price_dto.p).unwrap(),
+        close: BigDecimal::from_str(&price_dto.p)?,
         volume: if price_dto.v.is_empty() {
             None
         } else {
-            Some(BigDecimal::from_str(&price_dto.v).unwrap())
+            Some(BigDecimal::from_str(&price_dto.v)?)
         },
         time: price_dto.t.clone(),
     };

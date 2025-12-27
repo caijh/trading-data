@@ -1,16 +1,11 @@
 use crate::index::index_constituent_model::SyncIndexConstituents;
-use crate::index::index_svc::{
-    find_all_stock_index, sync_constituent_stocks_daily_price, sync_constituents,
-};
+use crate::index::index_svc::sync_constituents;
 use crate::index::{index_constituent_model, index_dao};
 use application_context::context::application_context::APPLICATION_CONTEXT;
 use application_core::env::property_resolver::PropertyResolver;
 use application_core::lang::runnable::Runnable;
 use async_trait::async_trait;
 use notification::{Notification, NotificationConfig};
-use rand::{Rng, rng};
-use redis::Commands;
-use redis_io::Redis;
 use tokio::spawn;
 use tracing::info;
 
@@ -99,47 +94,6 @@ async fn do_notification_index_stocks_changed(
             Notification::create(&title, &content)
                 .send(url.as_str(), notification_config.receiver.as_str())
                 .await
-        }
-    }
-}
-pub struct SyncAllIndexStockPriceJob {
-    pub code: Option<String>,
-}
-
-#[async_trait]
-impl Runnable for SyncAllIndexStockPriceJob {
-    async fn run(&self) {
-        let seconds = rng().random_range(1..10);
-        tokio::time::sleep(std::time::Duration::from_secs(seconds)).await;
-
-        let client = Redis::get_client();
-        let mut con = client.get_connection().unwrap();
-        let key = "Sync:Index:Price".to_string();
-        let value = con.get::<&str, Option<String>>(&key).unwrap();
-
-        match value {
-            None => {
-                con.set_ex::<&str, &str, String>(&key, "doing", 3600)
-                    .unwrap();
-                info!("SyncAllIndexStockPriceJob run ...");
-                let mut indexes = find_all_stock_index().await.unwrap();
-                if self.code.is_some() {
-                    // filter indexes use  code
-                    let code = self.code.as_ref().unwrap();
-                    indexes = indexes
-                        .into_iter()
-                        .filter(|index| index.code == *code)
-                        .collect::<Vec<_>>();
-                }
-                for index in indexes {
-                    let _ = sync_constituent_stocks_daily_price(&index.code).await;
-                }
-                info!("SyncAllIndexStockPriceJob end success");
-                let _ = con.del::<&str, i32>(&key);
-            }
-            Some(_value) => {
-                info!("Job is running")
-            }
         }
     }
 }

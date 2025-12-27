@@ -17,6 +17,38 @@ use crate::holiday::holiday_svc::today_is_holiday;
 use crate::stock::stock_model;
 use crate::token::token_svc;
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct StockDailyPriceDTO {
+    pub d: String,
+    pub o: String,
+    pub h: String,
+    pub l: String,
+    pub c: String,
+    pub v: String,
+    pub e: String,
+    pub zd: String,
+    pub zdf: String,
+    pub hs: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct StockPrice {
+    /// 股票代码
+    pub code: String,
+    /// 交易日期
+    pub date: u64,
+    /// 当日开盘价
+    pub open: BigDecimal,
+    /// 当日收盘价
+    pub close: BigDecimal,
+    /// 当日最高价
+    pub high: BigDecimal,
+    /// 当日最低价
+    pub low: BigDecimal,
+    /// 当日成交量，可能为空
+    pub volume: Option<BigDecimal>,
+}
+
 #[async_trait]
 pub trait StockPriceApi {
     async fn get_stock_price(
@@ -116,20 +148,6 @@ async fn get_current_price_from_szse(code: &str) -> Result<StockPriceDTO, Box<dy
         yc: "".to_string(),
         t: data["marketTime"].as_str().unwrap().to_string(),
     })
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct StockDailyPriceDTO {
-    pub d: String,
-    pub o: String,
-    pub h: String,
-    pub l: String,
-    pub c: String,
-    pub v: String,
-    pub e: String,
-    pub zd: String,
-    pub zdf: String,
-    pub hs: String,
 }
 
 pub async fn get_stock_daily_price(
