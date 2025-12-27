@@ -1,5 +1,4 @@
 pub mod stock_model;
-pub mod stock_price_model;
 
 pub mod stock_api;
 pub mod stock_price_api;

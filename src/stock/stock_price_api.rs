@@ -32,7 +32,7 @@ pub struct StockDailyPriceDTO {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct StockPrice {
+pub struct StockDailyPrice {
     /// 股票代码
     pub code: String,
     /// 交易日期
@@ -47,6 +47,18 @@ pub struct StockPrice {
     pub low: BigDecimal,
     /// 当日成交量，可能为空
     pub volume: Option<BigDecimal>,
+}
+
+fn create_stock_daily_price(code: &str, dto: &StockDailyPriceDTO) -> StockDailyPrice {
+    StockDailyPrice {
+        code: code.to_string(),
+        date: dto.d.parse::<u64>().unwrap(),
+        open: BigDecimal::from_str(&dto.o).unwrap(),
+        close: BigDecimal::from_str(&dto.c).unwrap(),
+        high: BigDecimal::from_str(&dto.h).unwrap(),
+        low: BigDecimal::from_str(&dto.l).unwrap(),
+        volume: Some(BigDecimal::from_str(&dto.v).unwrap()),
+    }
 }
 
 #[async_trait]
@@ -112,8 +124,7 @@ async fn get_current_price_from_sse(code: &str) -> Result<StockPriceDTO, Box<dyn
         ud: snap.get(7).unwrap().to_string(),
         v: snap.get(8).unwrap().to_string(),
         yc: snap.get(1).unwrap().to_string(),
-        t: NaiveDateTime::parse_from_str(&format!("{}{}", date, time), "%Y%m%d%H%M%S")
-            .unwrap()
+        t: NaiveDateTime::parse_from_str(&format!("{}{}", date, time), "%Y%m%d%H%M%S")?
             .format("%Y-%m-%d %H:%M:%S")
             .to_string(),
     })
@@ -152,7 +163,7 @@ async fn get_current_price_from_szse(code: &str) -> Result<StockPriceDTO, Box<dy
 
 pub async fn get_stock_daily_price(
     stock: &stock_model::Model,
-) -> Result<Vec<StockDailyPriceDTO>, Box<dyn Error>> {
+) -> Result<Vec<StockDailyPrice>, Box<dyn Error>> {
     let exchange = Exchange::from_str(stock.exchange.as_str())?;
     info!(
         "Get stock daily price from {}, code = {}",
@@ -191,6 +202,7 @@ pub async fn get_stock_daily_price(
                         zdf: "".to_string(),
                         hs: "".to_string(),
                     };
+                    let price = create_stock_daily_price(&stock.code, &price);
                     stock_prices.push(price);
                 }
             }
@@ -235,6 +247,7 @@ pub async fn get_stock_daily_price(
                         e: k.get(8).unwrap().to_string(),
                         hs: "".to_string(),
                     };
+                    let price = create_stock_daily_price(&stock.code, &price);
                     stock_prices.push(price);
                 }
             }
@@ -293,6 +306,7 @@ pub async fn get_stock_daily_price(
                         e: k.get(6).unwrap().as_number().unwrap().to_string(),
                         hs: "".to_string(),
                     };
+                    let price = create_stock_daily_price(&stock.code, &price);
                     stock_prices.push(price);
                 }
                 let date = Local::now().format("%Y%m%d").to_string();
@@ -308,11 +322,10 @@ pub async fn get_stock_daily_price(
                 {
                     // append today price
                     let stock_price = exchange.get_stock_price(&stock).await?;
-                    let date = NaiveDateTime::parse_from_str(&stock_price.t, "%Y-%m-%d %H:%M:%S")
-                        .unwrap()
+                    let date = NaiveDateTime::parse_from_str(&stock_price.t, "%Y-%m-%d %H:%M:%S")?
                         .format("%Y%m%d")
                         .to_string();
-                    stock_prices.push(StockDailyPriceDTO {
+                    let dto = StockDailyPriceDTO {
                         d: date,
                         o: stock_price.o,
                         h: stock_price.h,
@@ -323,7 +336,9 @@ pub async fn get_stock_daily_price(
                         zd: stock_price.ud,
                         zdf: stock_price.pc,
                         hs: "".to_string(),
-                    });
+                    };
+                    let price = create_stock_daily_price(&stock.code, &dto);
+                    stock_prices.push(price);
                 }
             }
             Ok(stock_prices)
@@ -335,7 +350,7 @@ pub async fn get_stock_daily_price(
 async fn get_stock_daily_price_from_nasdaq(
     exchange: &Exchange,
     stock: &stock_model::Model,
-) -> Result<Vec<StockDailyPriceDTO>, Box<dyn Error>> {
+) -> Result<Vec<StockDailyPrice>, Box<dyn Error>> {
     let application_context = APPLICATION_CONTEXT.read().await;
     let environment = application_context.get_environment().await;
 
@@ -355,22 +370,17 @@ async fn get_stock_daily_price_from_nasdaq(
     );
     info!("{:?}", url);
     let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36".parse().unwrap());
-    headers.insert("Accept", "*/*".parse().unwrap());
-    headers.insert("Connection", "keep-alive".parse().unwrap());
-    headers.insert("Accept-Encoding", "gzip, deflate, br".parse().unwrap());
-    headers.insert("Accept-Language", "en-US,en;q=0.9".parse().unwrap());
-    headers.insert("X-KL-Ajax-Request", "Ajax_Request".parse().unwrap());
+    headers.insert("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36".parse()?);
+    headers.insert("Accept", "*/*".parse()?);
+    headers.insert("Connection", "keep-alive".parse()?);
+    headers.insert("Accept-Encoding", "gzip, deflate, br".parse()?);
+    headers.insert("Accept-Language", "en-US,en;q=0.9".parse()?);
+    headers.insert("X-KL-Ajax-Request", "Ajax_Request".parse()?);
     headers.insert(
         "Referer",
-        "https://charting.nasdaq.com/dynamic/chart.html"
-            .parse()
-            .unwrap(),
+        "https://charting.nasdaq.com/dynamic/chart.html".parse()?,
     );
-    let client = reqwest::Client::builder()
-        .cookie_store(true)
-        .build()
-        .unwrap();
+    let client = reqwest::Client::builder().cookie_store(true).build()?;
     let response = client.get(&url).headers(headers).send().await?;
     let data: Value = response.json().await?;
     let kline = data.get("marketData").unwrap().as_array();
@@ -379,7 +389,7 @@ async fn get_stock_daily_price_from_nasdaq(
         for k in kline {
             let datetime = k["Date"].as_str().unwrap();
             let datetime = NaiveDateTime::parse_from_str(datetime, "%Y-%m-%d %H:%M:%S");
-            let date = datetime.unwrap().format("%Y%m%d").to_string();
+            let date = datetime?.format("%Y%m%d").to_string();
             let price = StockDailyPriceDTO {
                 d: date,
                 o: k["Open"].as_number().unwrap().to_string(),
@@ -392,6 +402,7 @@ async fn get_stock_daily_price_from_nasdaq(
                 e: "".to_string(),
                 hs: "".to_string(),
             };
+            let price = create_stock_daily_price(&stock.code, &price);
             stock_prices.push(price);
         }
     }
@@ -453,8 +464,7 @@ async fn get_current_stock_price_from_hk(
     let am_u = data["am_u"].as_str().unwrap().to_string();
     let am = cal_value(&am, &am_u);
     let update_time = data["updatetime"].as_str().unwrap().to_string();
-    let t = NaiveDateTime::parse_from_str(&update_time, "%Y年%m月%d日%H:%M")
-        .unwrap()
+    let t = NaiveDateTime::parse_from_str(&update_time, "%Y年%m月%d日%H:%M")?
         .format("%Y-%m-%d %H:%M:%S")
         .to_string();
     Ok(StockPriceDTO {
@@ -575,15 +585,12 @@ async fn get_current_price_from_nasdaq(
     };
     info!("Get stock {} daily price from url = {}", &stock.code, url);
     let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36".parse().unwrap());
-    headers.insert("Accept", "*/*".parse().unwrap());
-    headers.insert("Connection", "keep-alive".parse().unwrap());
-    headers.insert("Accept-Encoding", "gzip, deflate, br".parse().unwrap());
-    headers.insert("Accept-Language", "en-US,en;q=0.9".parse().unwrap());
-    let client = reqwest::Client::builder()
-        .cookie_store(true)
-        .build()
-        .unwrap();
+    headers.insert("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36".parse()?);
+    headers.insert("Accept", "*/*".parse()?);
+    headers.insert("Connection", "keep-alive".parse()?);
+    headers.insert("Accept-Encoding", "gzip, deflate, br".parse()?);
+    headers.insert("Accept-Language", "en-US,en;q=0.9".parse()?);
+    let client = reqwest::Client::builder().cookie_store(true).build()?;
     let response = client.get(&url).headers(headers).send().await?;
     let text: Value = response.json().await?;
     let data = text.get("data").unwrap();

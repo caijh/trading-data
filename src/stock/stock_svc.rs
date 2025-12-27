@@ -4,8 +4,7 @@ use crate::fund::fund_api::FundApi;
 use crate::fund::{fund_dao, fund_model};
 use crate::stock::stock_api::StockApi;
 use crate::stock::stock_model::{Model as Stock, StockKind, StockPrice};
-use crate::stock::stock_price_api::{StockDailyPriceDTO, StockPriceApi};
-use crate::stock::stock_price_model::Model as StockDailyPrice;
+use crate::stock::stock_price_api::{StockDailyPrice, StockPriceApi};
 use crate::stock::{stock_cache, stock_dao, stock_model, stock_price_api};
 use application_beans::factory::bean_factory::BeanFactory;
 use application_context::context::application_context::APPLICATION_CONTEXT;
@@ -151,11 +150,8 @@ pub async fn get_stock_daily_price(code: &str) -> Result<Vec<StockDailyPrice>, B
         stock_cache::get_stock_daily_prices(&stock).await?;
 
     if daily_prices.is_empty() {
-        let prices_dto = stock_price_api::get_stock_daily_price(&stock).await?;
-        for dto in prices_dto {
-            let daily_price = create_stock_daily_price(code, &dto);
-            daily_prices.push(daily_price);
-        }
+        let prices = stock_price_api::get_stock_daily_price(&stock).await?;
+        daily_prices = prices;
         let exchange = Exchange::from_str(stock.exchange.as_str())?;
         let market_closed = exchange_svc::is_market_closed(&exchange).await?;
         if market_closed {
@@ -164,18 +160,6 @@ pub async fn get_stock_daily_price(code: &str) -> Result<Vec<StockDailyPrice>, B
     }
 
     Ok(daily_prices)
-}
-
-fn create_stock_daily_price(code: &str, dto: &StockDailyPriceDTO) -> StockDailyPrice {
-    StockDailyPrice {
-        code: code.to_string(),
-        date: dto.d.parse::<u64>().unwrap(),
-        open: BigDecimal::from_str(&dto.o).unwrap(),
-        close: BigDecimal::from_str(&dto.c).unwrap(),
-        high: BigDecimal::from_str(&dto.h).unwrap(),
-        low: BigDecimal::from_str(&dto.l).unwrap(),
-        volume: Some(BigDecimal::from_str(&dto.v).unwrap()),
-    }
 }
 
 pub async fn get_stock_price(code: &str) -> Result<StockPrice, Box<dyn Error>> {

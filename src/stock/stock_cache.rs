@@ -1,6 +1,7 @@
 use crate::exchange::exchange_model::Exchange;
 use crate::stock::stock_model::Model as Stock;
-use crate::stock::{stock_dao, stock_model, stock_price_model};
+use crate::stock::stock_price_api::StockDailyPrice;
+use crate::stock::{stock_dao, stock_model};
 use application_cache::CacheManager;
 use chrono::{Timelike, Utc};
 use redis::Commands;
@@ -30,9 +31,7 @@ pub async fn get_stock(code: &str) -> Result<stock_model::Model, Box<dyn Error>>
     Ok(stock)
 }
 
-pub async fn get_stock_daily_prices(
-    stock: &Stock,
-) -> Result<Vec<stock_price_model::Model>, Box<dyn Error>> {
+pub async fn get_stock_daily_prices(stock: &Stock) -> Result<Vec<StockDailyPrice>, Box<dyn Error>> {
     let client = Redis::get_client();
     let mut con = client.get_connection()?;
     let key = "Stock:Price:K:D:".to_string() + &stock.code;
@@ -41,7 +40,7 @@ pub async fn get_stock_daily_prices(
     // 缓存命中，直接返回结果
     if let Some(value) = value {
         info!("Get stock daily price from cache, code = {}", stock.code);
-        let prices: Vec<stock_price_model::Model> = serde_json::from_str(&value)?;
+        let prices: Vec<StockDailyPrice> = serde_json::from_str(&value)?;
         return Ok(prices);
     }
 
@@ -50,7 +49,7 @@ pub async fn get_stock_daily_prices(
 
 pub async fn set_stock_daily_prices(
     stock: &Stock,
-    prices: &Vec<stock_price_model::Model>,
+    prices: &Vec<StockDailyPrice>,
 ) -> Result<(), Box<dyn Error>> {
     let client = Redis::get_client();
     let mut con = client.get_connection()?;
