@@ -16,7 +16,7 @@ FROM debian:bookworm-slim
 ARG APP=/usr/src/app
 
 RUN apt-get update \
-  && apt-get install -y ca-certificates tzdata openssl \
+  && apt-get install -y ca-certificates tzdata openssl libc6 \
   && rm -rf /var/lib/apt/lists/*
 
 EXPOSE 8080
