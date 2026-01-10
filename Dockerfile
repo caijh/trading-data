@@ -11,7 +11,7 @@ ADD . ./
 RUN cargo build --release
 
 
-FROM debian:bookworm-slim
+FROM ubuntu:25.10
 
 ARG APP=/usr/src/app
 
