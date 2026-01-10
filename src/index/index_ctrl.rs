@@ -51,7 +51,7 @@ pub async fn get_all_index(Query(params): Query<GetIndexParams>) -> impl IntoRes
 /// ```
 ///
 /// ```
-#[get("/index/:code/stocks")]
+#[get("/index/{code}/stocks")]
 pub async fn get_stocks(Path(code): Path<String>) -> impl IntoResponse {
     let r = index_svc::get_constituent_stocks(&code).await;
 
@@ -59,7 +59,7 @@ pub async fn get_stocks(Path(code): Path<String>) -> impl IntoResponse {
 }
 
 /// 后台同步指定指数的股票信息
-#[get("/index/sync/:code")]
+#[get("/index/sync/{code}")]
 pub async fn sync(Path(code): Path<String>) -> impl IntoResponse {
     let r = index_svc::sync_constituents(&code).await;
 

@@ -18,7 +18,7 @@ use axum::response::IntoResponse;
 /// # Note
 /// - 使用`fund_svc::find_by_exchange`异步函数查询资金信息，该函数根据交易所名称查询并返回资金记录
 /// - 最后，使用`RespBody::result(&r)`来构建响应体，它根据查询结果生成适当的HTTP响应
-#[get("/exchange/:exchange/funds")]
+#[get("/exchange/{exchange}/funds")]
 pub async fn get_exchange_funds(Path(exchange): Path<String>) -> impl IntoResponse {
     let r = fund_svc::find_by_exchange(&exchange).await;
 

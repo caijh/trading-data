@@ -31,7 +31,7 @@ async fn exchange_list() -> impl IntoResponse {
     RespBody::success(&exchanges)
 }
 
-#[get("/exchange/:exchange/time")]
+#[get("/exchange/{exchange}/time")]
 async fn exchange_current_time(Path(exchange): Path<String>) -> impl IntoResponse {
     let r = exchange_svc::get_exchange_current_time(&exchange).await;
     RespBody::result(&r)
@@ -49,7 +49,7 @@ async fn exchange_current_time(Path(exchange): Path<String>) -> impl IntoRespons
 /// 使用Path参数来捕获URL中的exchange部分，以便于获取特定交易所的信息
 /// 通过调用`exchange_svc::get_market_status_from_cache`函数来从缓存中获取市场状态信息
 /// 最后使用`RespBody::result`来根据查询结果构建HTTP响应
-#[get("/exchange/:exchange/market/status")]
+#[get("/exchange/{exchange}/market/status")]
 async fn get_market_status(Path(exchange): Path<String>) -> impl IntoResponse {
     let r = exchange_svc::get_exchange_market_status_cache(&exchange).await;
     RespBody::result(&r)
@@ -73,7 +73,7 @@ async fn get_market_status_by_stock_code(
  * # 返回值
  * 实现了 `IntoResponse` 的一个类型，通常用于构建HTTP响应。
  */
-#[get("/exchange/stock/sync/:exchange")]
+#[get("/exchange/stock/sync/{exchange}")]
 async fn sync(Path(exchange): Path<String>) -> impl IntoResponse {
     spawn(async {
         let job = SyncStocksJob { exchange };
