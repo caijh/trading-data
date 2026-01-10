@@ -84,8 +84,3 @@ pub async fn sync_all() -> impl IntoResponse {
 
     RespBody::<()>::success_info("Sync index Stocks in background")
 }
-
-#[derive(Serialize, Deserialize)]
-struct IndexStockPriceSyncParams {
-    code: Option<String>,
-}

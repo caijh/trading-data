@@ -23,16 +23,16 @@ database-mysql-seaorm = { git = "https://github.com/caijh/application-rs.git" }
 sea-orm = { version = "1.1.3", features = ["sqlx-mysql", "runtime-tokio-rustls", "macros", "with-bigdecimal", "with-uuid", "with-json", "with-chrono", "with-time"] }
 
 # redis
-redis = { version = "0.32.2", features = ["tls-native-tls"] }
+redis = { version = "1.0.2", features = ["tls-native-tls"] }
 redis-io = { git = "https://caijh@bitbucket.org/bytebinary/redis-io-rs.git" }
 
 # web
 async-trait = "0.1.84"
-axum = "0.7.9"
+axum = "0.8.8"
 # util
 util = { git = "https://caijh@bitbucket.org/bytebinary/util-rs.git"}
 
-reqwest = { version = "0.12.12", features = ["cookies", "blocking", "gzip"] }
+reqwest = { version = "0.13.1", features = ["cookies", "blocking", "gzip"] }
 serde = { version = "1.0.217", features = ["derive"] }
 tokio = { version = "1.42.0", features = ["full"] }
 serde_json = "1.0.134"
@@ -45,7 +45,7 @@ notification = { git = "https://caijh@bitbucket.org/bytebinary/notification-rs.g
 tempfile = "3.15.0"
 lazy_static = "1.5.0"
 chrono-tz = "0.10.0"
-scraper = "0.24.0"
+scraper = "0.25.0"
 
 [features]
 default = ["signal"]
