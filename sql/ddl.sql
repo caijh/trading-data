@@ -37,29 +37,15 @@ create table stock.stock
 )
     comment '股市列表';
 
-
-
-create table stock.stock_daily_price
+create table stock.market_time
 (
-    code   varchar(10)     not null,
-    date   bigint unsigned not null,
-    open   decimal(10, 3)  null,
-    close  decimal(10, 3)  null,
-    high   decimal(10, 3)  null,
-    low    decimal(10, 3)  null,
-    volume decimal(18, 2)  null,
-    primary key (code, date)
-)
-    comment '股票每日行情数据';
-
-create table stock.stock_daily_price_sync_record
-(
-    code    varchar(10)          not null
+    id         bigint unsigned auto_increment
         primary key,
-    date    bigint unsigned      not null,
-    updated tinyint(1) default 0 null
+    exchange   varchar(10) not null comment '交易所',
+    start_time time        not null comment '开始时间',
+    end_time   time        not null comment '结束时间'
 )
-    comment '股票每日股价同步记录';
+    comment '市场交易时间';
 
 create table stock.stock_index
 (
@@ -71,15 +57,11 @@ create table stock.stock_index
 )
     comment '股票指数';
 
+create index stock_index_exchange_index
+    on stock.stock_index (exchange);
+
+create index stock_index_index_code_index
+    on stock.stock_index (index_code);
 
 
-create table market_time
-(
-    id         bigint unsigned auto_increment
-        primary key,
-    exchange   varchar(10) not null comment '交易所',
-    start_time time        not null comment '开始时间',
-    end_time   time        not null comment '结束时间'
-)
-    comment '市场交易时间';
 
