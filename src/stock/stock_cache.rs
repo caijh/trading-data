@@ -56,7 +56,7 @@ pub async fn set_stock_daily_prices(
     let key = "Stock:Price:K:D:".to_string() + &stock.code;
     let exchange = Exchange::from_str(&stock.exchange)?;
     let now = Utc::now().with_timezone(&exchange.time_zone());
-    let seconds = 3600 * 24 - now.num_seconds_from_midnight();
+    let seconds = 60 * 10;
     con.set_ex::<&str, String, String>(
         &key,
         serde_json::to_string(&prices).unwrap(),
