@@ -54,9 +54,7 @@ pub async fn set_stock_daily_prices(
     let client = Redis::get_client();
     let mut con = client.get_connection()?;
     let key = "Stock:Price:K:D:".to_string() + &stock.code;
-    let exchange = Exchange::from_str(&stock.exchange)?;
-    let now = Utc::now().with_timezone(&exchange.time_zone());
-    let seconds = 60 * 10;
+    let seconds = 60 * 5;
     con.set_ex::<&str, String, String>(
         &key,
         serde_json::to_string(&prices).unwrap(),
