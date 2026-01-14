@@ -1,13 +1,10 @@
-use crate::exchange::exchange_model::Exchange;
 use crate::stock::stock_model::Model as Stock;
 use crate::stock::stock_price_api::StockDailyPrice;
 use crate::stock::{stock_dao, stock_model};
 use application_cache::CacheManager;
-use chrono::{Timelike, Utc};
 use redis::Commands;
 use redis_io::Redis;
 use std::error::Error;
-use std::str::FromStr;
 use tracing::info;
 
 pub async fn get_stock(code: &str) -> Result<stock_model::Model, Box<dyn Error>> {
@@ -26,7 +23,7 @@ pub async fn get_stock(code: &str) -> Result<stock_model::Model, Box<dyn Error>>
     }
     let stock = stock.unwrap();
     // 将查询结果存入缓存
-    CacheManager::set(code, &serde_json::to_string(&stock).unwrap()).await;
+    CacheManager::set(code, &serde_json::to_string(&stock)?).await;
 
     Ok(stock)
 }
