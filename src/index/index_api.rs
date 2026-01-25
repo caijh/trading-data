@@ -112,17 +112,17 @@ async fn get_stocks_from_nasdaq(
     info!("Query Index Stocks from url = {}", url);
     let mut headers = reqwest::header::HeaderMap::new();
     headers.insert("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36".parse().unwrap());
-    headers.insert("Accept", "*/*".parse().unwrap());
-    headers.insert("Connection", "keep-alive".parse().unwrap());
-    headers.insert("Accept-Encoding", "gzip, deflate, br".parse().unwrap());
-    headers.insert("Accept-Language", "en-US,en;q=0.9".parse().unwrap());
+    headers.insert("Accept", "*/*".parse()?);
+    headers.insert("Connection", "keep-alive".parse()?);
+    headers.insert("Accept-Encoding", "gzip, deflate, br".parse()?);
+    headers.insert("Accept-Language", "en-US,en;q=0.9".parse()?);
     let client = reqwest::Client::builder()
         .cookie_store(true)
         .build()
         .unwrap();
     let response = client.get(&url).headers(headers).send().await?;
     let text = response.text().await?;
-    let data = serde_json::from_str::<Value>(&text).unwrap();
+    let data = serde_json::from_str::<Value>(&text)?;
     let data = data.get("data").unwrap();
     let data = data.get("data").unwrap();
     let rows = data.get("rows").unwrap().as_array().unwrap();
@@ -135,10 +135,8 @@ async fn get_stocks_from_nasdaq(
             .as_str()
             .unwrap()
             .to_string();
-        let idx = name.find(".");
-        if idx.is_some() {
-            name = name[..idx.unwrap()].to_string();
-        }
+        name = name.replace("Class A Common Stock", "").trim().to_string();
+        name = name.replace("Common Stock", "").trim().to_string();
         let stock = Stock {
             code: format!("{}{}", code, exchange.stock_code_suffix()),
             name,
