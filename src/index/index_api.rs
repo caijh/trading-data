@@ -111,15 +111,12 @@ async fn get_stocks_from_nasdaq(
     let url = format!("https://api.nasdaq.com/api/quote/list-type/{}", "nasdaq100");
     info!("Query Index Stocks from url = {}", url);
     let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36".parse().unwrap());
+    headers.insert("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36".parse()?);
     headers.insert("Accept", "*/*".parse()?);
     headers.insert("Connection", "keep-alive".parse()?);
     headers.insert("Accept-Encoding", "gzip, deflate, br".parse()?);
     headers.insert("Accept-Language", "en-US,en;q=0.9".parse()?);
-    let client = reqwest::Client::builder()
-        .cookie_store(true)
-        .build()
-        .unwrap();
+    let client = reqwest::Client::builder().cookie_store(true).build()?;
     let response = client.get(&url).headers(headers).send().await?;
     let text = response.text().await?;
     let data = serde_json::from_str::<Value>(&text)?;
@@ -153,15 +150,12 @@ async fn get_spx_stocks_from_wikipedia(exchange: &Exchange) -> Result<Vec<Stock>
     let url = "https://en.wikipedia.org/wiki/List_of_S&P_500_companies";
     info!("Query Index Stocks from url = {}", url);
     let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36".parse().unwrap());
-    headers.insert("Accept", "*/*".parse().unwrap());
-    headers.insert("Connection", "keep-alive".parse().unwrap());
-    headers.insert("Accept-Encoding", "gzip, deflate, br".parse().unwrap());
-    headers.insert("Accept-Language", "en-US,en;q=0.9".parse().unwrap());
-    let client = reqwest::Client::builder()
-        .cookie_store(true)
-        .build()
-        .unwrap();
+    headers.insert("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36".parse()?);
+    headers.insert("Accept", "*/*".parse()?);
+    headers.insert("Connection", "keep-alive".parse()?);
+    headers.insert("Accept-Encoding", "gzip, deflate, br".parse()?);
+    headers.insert("Accept-Language", "en-US,en;q=0.9".parse()?);
+    let client = reqwest::Client::builder().cookie_store(true).build()?;
     let resp = client
         .get(url)
         .headers(headers)
@@ -171,9 +165,9 @@ async fn get_spx_stocks_from_wikipedia(exchange: &Exchange) -> Result<Vec<Stock>
         .await?;
     let document = Html::parse_document(&resp);
     // Wikipedia 表格选择器
-    let table_selector = Selector::parse("table.wikitable").unwrap();
-    let row_selector = Selector::parse("tr").unwrap();
-    let cell_selector = Selector::parse("td").unwrap();
+    let table_selector = Selector::parse("table.wikitable")?;
+    let row_selector = Selector::parse("tr")?;
+    let cell_selector = Selector::parse("td")?;
 
     // 找到第一个 table（就是 S&P500 成分股列表）
     let table = document
@@ -202,7 +196,7 @@ async fn get_spx_stocks_from_wikipedia(exchange: &Exchange) -> Result<Vec<Stock>
     Ok(stocks)
 }
 async fn download(url: &str, path: &Path) -> Result<(), Box<dyn Error>> {
-    let client = reqwest::Client::builder().build().unwrap();
+    let client = reqwest::Client::builder().build()?;
     let response = client.get(url).send().await;
     match response {
         Ok(response) => {
