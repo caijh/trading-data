@@ -89,17 +89,14 @@ async fn get_funds_from_hkex_subcat(
 }
 
 async fn get_funds_from_nasdaq(exchange: &Exchange) -> Result<Vec<Stock>, Box<dyn Error>> {
-    let url = "https://api.nasdaq.com/api/screener/etf?download=true".to_string();
+    let url = "https://api.nasdaq.com/api/screener/etf?download=true&assetclass=equity".to_string();
     let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36".parse().unwrap());
-    headers.insert("Accept", "*/*".parse().unwrap());
-    headers.insert("Connection", "keep-alive".parse().unwrap());
-    headers.insert("Accept-Encoding", "gzip, deflate, br".parse().unwrap());
-    headers.insert("Accept-Language", "en-US,en;q=0.9".parse().unwrap());
-    let client = reqwest::Client::builder()
-        .cookie_store(true)
-        .build()
-        .unwrap();
+    headers.insert("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36".parse()?);
+    headers.insert("Accept", "*/*".parse()?);
+    headers.insert("Connection", "keep-alive".parse()?);
+    headers.insert("Accept-Encoding", "gzip, deflate, br".parse()?);
+    headers.insert("Accept-Language", "en-US,en;q=0.9".parse()?);
+    let client = reqwest::Client::builder().cookie_store(true).build()?;
     let response = client.get(url).headers(headers).send().await;
     match response {
         Ok(response) => {
@@ -137,11 +134,11 @@ async fn get_funds_from_sse(exchange: &Exchange) -> Result<Vec<Stock>, Box<dyn E
         rng().random::<f64>()
     );
     let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36".parse().unwrap());
-    headers.insert("X-Requested-With", "XMLHttpRequest".parse().unwrap());
-    headers.insert("Referer", "https://www.sse.com.cn/".parse().unwrap());
-    headers.insert("Connection", "keep-alive".parse().unwrap());
-    let client = reqwest::Client::builder().build().unwrap();
+    headers.insert("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36".parse()?);
+    headers.insert("X-Requested-With", "XMLHttpRequest".parse()?);
+    headers.insert("Referer", "https://www.sse.com.cn/".parse()?);
+    headers.insert("Connection", "keep-alive".parse()?);
+    let client = reqwest::Client::builder().build()?;
     let response = client.get(url).headers(headers).send().await;
     match response {
         Ok(response) => {
