@@ -176,8 +176,8 @@ pub async fn get_stock_prices(code: &str) -> Result<Vec<StockDailyPrice>, Box<dy
     // 如果存在替代的成交量数据，则进行替换
     if let Some(volume_prices) = volume_prices {
         for (price, volume_price) in prices.iter_mut().zip(volume_prices.iter()) {
-            // 如果原始的成交量为 None，或者存在成交量数据，则替换
-            if price.volume.is_none() {
+            // 如果原始的成交量为 None 或 0，则替换
+            if price.volume.is_none() || price.volume.as_ref().unwrap() == &BigDecimal::from(0) {
                 price.volume = Some(volume_price.volume.clone().unwrap_or_else(|| BigDecimal::from(0)));
             }
         }
