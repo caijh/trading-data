@@ -163,7 +163,7 @@ pub async fn get_stock_daily_price(code: &str) -> Result<Vec<StockDailyPrice>, B
 }
 
 pub async fn get_stock_prices(code: &str) -> Result<Vec<StockDailyPrice>, Box<dyn Error>> {
-    let prices = get_stock_daily_price(code).await?;
+    let mut prices = get_stock_daily_price(code).await?;
 
     let mut volume_prices: Option<Vec<StockDailyPrice>> = None;
 
