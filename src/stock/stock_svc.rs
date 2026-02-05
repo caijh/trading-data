@@ -162,6 +162,31 @@ pub async fn get_stock_daily_price(code: &str) -> Result<Vec<StockDailyPrice>, B
     Ok(daily_prices)
 }
 
+pub async fn get_stock_prices(code: &str) -> Result<Vec<StockDailyPrice>, Box<dyn Error>> {
+    let prices = get_stock_daily_price(code).await?;
+
+    let mut volume_prices: Option<Vec<StockDailyPrice>> = None;
+
+    // 如果股票代码是 NDX 或 SPX, 获取 QQQ 或 SPY 的成交量数据
+    if code == "NDX.NS" || code == "SPX.NS" {
+        let volume_stock = if code == "NDX.NS" { "QQQ.NS" } else { "SPY.NS" };
+        volume_prices = Some(get_stock_daily_price(volume_stock).await?);
+    }
+
+    // 如果存在替代的成交量数据，则进行替换
+    if let Some(volume_prices) = volume_prices {
+        for (price, volume_price) in prices.iter_mut().zip(volume_prices.iter()) {
+            // 如果原始的成交量为 None，或者存在成交量数据，则替换
+            if price.volume.is_none() {
+                price.volume = Some(volume_price.volume.clone().unwrap_or_else(|| BigDecimal::from(0)));
+            }
+        }
+    }
+
+    Ok(prices)
+}
+
+
 pub async fn get_stock_price(code: &str) -> Result<StockPrice, Box<dyn Error>> {
     let stock = get_stock(code).await?;
     let exchange = Exchange::from_str(&stock.exchange)?;

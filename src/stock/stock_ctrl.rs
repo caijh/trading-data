@@ -30,6 +30,6 @@ async fn stock_price(Query(params): Query<StockParams>) -> impl IntoResponse {
 /// 获取股票日线价格
 #[get("/stock/price/daily")]
 async fn stock_daily_price(Query(params): Query<StockParams>) -> impl IntoResponse {
-    let r = stock_svc::get_stock_daily_price(&params.code).await;
+    let r = stock_svc::get_stock_price(&params.code).await;
     RespBody::result(&r).response()
 }
