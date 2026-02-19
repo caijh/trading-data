@@ -179,7 +179,7 @@ async fn get_spx_stocks_from_wikipedia(exchange: &Exchange) -> Result<Vec<Stock>
     for row in table.select(&row_selector).skip(1) {
         let mut cells = row.select(&cell_selector);
         if let (Some(symbol_cell), Some(name_cell)) = (cells.next(), cells.next()) {
-            let code = symbol_cell.text().collect::<String>().trim().to_string().replace(".", "/");
+            let code = symbol_cell.text().collect::<String>().trim().to_string();
             let name = name_cell.text().collect::<String>().trim().to_string();
 
             let stock = Stock {
@@ -187,7 +187,7 @@ async fn get_spx_stocks_from_wikipedia(exchange: &Exchange) -> Result<Vec<Stock>
                 name,
                 exchange: exchange.as_ref().to_string(),
                 stock_type: "Stock".to_string(),
-                stock_code: code,
+                stock_code: code.replace(".", "/"),
             };
             stocks.push(stock);
         }
