@@ -2,17 +2,20 @@ use crate::exchange::exchange_model::Exchange;
 use crate::exchange::exchange_svc;
 use crate::fund::fund_api::FundApi;
 use crate::fund::{fund_dao, fund_model};
+use crate::index::index_job::SyncIndexStocksJob;
 use crate::stock::stock_api::StockApi;
 use crate::stock::stock_model::{Model as Stock, StockKind, StockPrice};
 use crate::stock::stock_price_api::{StockDailyPrice, StockPriceApi};
 use crate::stock::{stock_cache, stock_dao, stock_model, stock_price_api};
 use application_beans::factory::bean_factory::BeanFactory;
 use application_context::context::application_context::APPLICATION_CONTEXT;
+use application_core::lang::runnable::Runnable;
 use bigdecimal::BigDecimal;
 use database_mysql_seaorm::Dao;
 use sea_orm::ActiveValue::Set;
 use sea_orm::EntityTrait;
 use sea_orm::IntoActiveModel;
+use tokio::spawn;
 use std::error::Error;
 use std::ops::Not;
 use std::str::FromStr;
@@ -29,6 +32,7 @@ use tracing::info;
 /// # Remarks
 /// 该函数首先会根据传入的交易所名称创建一个Exchange实例，然后同步该交易所的股票和基金信息
 pub async fn sync(exchange: &str) -> Result<(), Box<dyn Error>> {
+    let exchange_str = exchange.to_string();
     let exchange = Exchange::from_str(exchange)?;
 
     // 同步股票信息
@@ -36,6 +40,12 @@ pub async fn sync(exchange: &str) -> Result<(), Box<dyn Error>> {
 
     // 同步基金信息
     sync_funds(&exchange).await?;
+
+    spawn(async {
+        let job = SyncIndexStocksJob { exchange: Some(exchange_str) };
+        job.run().await;
+    });
+
 
     Ok(())
 }

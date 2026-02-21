@@ -78,7 +78,7 @@ pub async fn sync(Path(code): Path<String>) -> impl IntoResponse {
 #[get("/index/sync")]
 pub async fn sync_all() -> impl IntoResponse {
     spawn(async {
-        let job = SyncIndexStocksJob;
+        let job = SyncIndexStocksJob {exchange: None};
         job.run().await;
     });
 

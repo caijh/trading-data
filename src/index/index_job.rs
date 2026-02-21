@@ -1,6 +1,7 @@
 use crate::index::index_constituent_model::SyncIndexConstituents;
 use crate::index::index_svc::sync_constituents;
 use crate::index::{index_constituent_model, index_dao};
+use crate::exchange::exchange_model::Exchange;
 use application_context::context::application_context::APPLICATION_CONTEXT;
 use application_core::env::property_resolver::PropertyResolver;
 use application_core::lang::runnable::Runnable;
@@ -8,14 +9,22 @@ use async_trait::async_trait;
 use notification::{Notification, NotificationConfig};
 use tokio::spawn;
 use tracing::info;
+use std::str::FromStr;
 
-pub struct SyncIndexStocksJob;
+pub struct SyncIndexStocksJob {
+    pub exchange: Option<String>,
+}
 
 #[async_trait]
 impl Runnable for SyncIndexStocksJob {
     async fn run(&self) {
         info!("SyncIndexStocksJob run ...");
-        let indexes = index_dao::find_all().await;
+        let indexes = if let Some(exchange_str) = &self.exchange {
+            let exchange = Exchange::from_str(exchange_str.as_str()).unwrap();
+            index_dao::find_by_exchange(&exchange).await
+        } else {
+            index_dao::find_all().await
+        };
         match indexes {
             Ok(indexes) => {
                 for index in indexes {
