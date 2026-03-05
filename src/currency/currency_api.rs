@@ -37,11 +37,9 @@ pub async fn get_rate() -> Result<Vec<CurrencyRate>, Box<dyn Error>> {
             let price = CurrencyRate {
                 from: rate.get("ccyNbrEng").unwrap().as_str().unwrap().to_string(),
                 to: "RMB".to_string(),
-                buy_price: BigDecimal::from_str(rate.get("rthOfr").unwrap().as_str().unwrap())
-                    .unwrap()
+                buy_price: BigDecimal::from_str(rate.get("rthOfr").unwrap().as_str().unwrap())?
                     / 100, // 购汇
-                sell_price: BigDecimal::from_str(rate.get("rthBid").unwrap().as_str().unwrap())
-                    .unwrap()
+                sell_price: BigDecimal::from_str(rate.get("rthBid").unwrap().as_str().unwrap())?
                     / 100, // 结汇
             };
             currency_rates.push(price);
