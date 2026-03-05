@@ -21,3 +21,5 @@ baseurl = "https://www1.hkex.com.hk"
 [stock.api.nasdaq]
 baseurl = "https://api.nasdaq.com"
 charting = "https://charting.nasdaq.com"
+[stock.api.akshare]
+baseurl = "http://127.0.0.1:18088"
