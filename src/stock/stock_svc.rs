@@ -15,10 +15,10 @@ use database_mysql_seaorm::Dao;
 use sea_orm::ActiveValue::Set;
 use sea_orm::EntityTrait;
 use sea_orm::IntoActiveModel;
-use tokio::spawn;
 use std::error::Error;
 use std::ops::Not;
 use std::str::FromStr;
+use tokio::spawn;
 use tracing::info;
 
 /// 异步同步指定交易所的证券和基金信息
@@ -42,10 +42,11 @@ pub async fn sync(exchange: &str) -> Result<(), Box<dyn Error>> {
     sync_funds(&exchange).await?;
 
     spawn(async {
-        let job = SyncIndexStocksJob { exchange: Some(exchange_str) };
+        let job = SyncIndexStocksJob {
+            exchange: Some(exchange_str),
+        };
         job.run().await;
     });
-
 
     Ok(())
 }
@@ -185,17 +186,25 @@ pub async fn get_stock_prices(code: &str) -> Result<Vec<StockDailyPrice>, Box<dy
 
     // 如果存在替代的成交量数据，则进行替换
     if let Some(volume_prices) = volume_prices {
-        for (price, volume_price) in prices.iter_mut().zip(volume_prices.iter()) {
-            // 如果原始的成交量为 None 或 0，则替换
-            if price.volume.is_none() || price.volume.as_ref().unwrap() == &BigDecimal::from(0) {
-                price.volume = Some(volume_price.volume.clone().unwrap_or_else(|| BigDecimal::from(0)));
+        for price in prices.iter_mut() {
+            // 查找日期相同的成交量数据
+            if let Some(volume_price) = volume_prices.iter().find(|vp| vp.date == price.date) {
+                // 如果原始的成交量为 None 或 0，则替换
+                if price.volume.is_none() || price.volume.as_ref().unwrap() == &BigDecimal::from(0)
+                {
+                    price.volume = Some(
+                        volume_price
+                            .volume
+                            .clone()
+                            .unwrap_or_else(|| BigDecimal::from(0)),
+                    );
+                }
             }
         }
     }
 
     Ok(prices)
 }
-
 
 pub async fn get_stock_price(code: &str) -> Result<StockPrice, Box<dyn Error>> {
     let stock = get_stock(code).await?;
