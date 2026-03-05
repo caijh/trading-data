@@ -348,6 +348,8 @@ pub async fn get_stock_daily_price(
             if code == "NDX.NS" || code == "SPX.NS" {
                 let symbol = if code == "NDX.NS" { ".NDX" } else { ".INX" };
                 get_index_stock_daily_price_from_akshare(&exchange, stock, symbol).await
+            } else if regex::Regex::new(r"^[A-Z]+\.[A-Z]+\.NS$")?.is_match(code) {
+                get_stock_daily_price_from_akshare(&exchange, stock).await
             } else {
                 get_stock_daily_price_from_nasdaq(&exchange, stock).await
             }
@@ -727,4 +729,51 @@ pub fn remove_jquery_wrapping_fn_call(data: &str) -> Value {
     } else {
         serde_json::from_str::<Value>(data).unwrap()
     }
+}
+
+async fn get_stock_daily_price_from_akshare(
+    _exchange: &Exchange,
+    stock: &stock_model::Model,
+) -> Result<Vec<StockDailyPrice>, Box<dyn Error>> {
+    let application_context = APPLICATION_CONTEXT.read().await;
+    let environment = application_context.get_environment().await;
+    let url = environment
+        .get_property::<String>("stock.api.akshare.baseurl")
+        .unwrap();
+
+    let symbol = &stock.stock_code;
+    let url = format!(
+        "{}/api/public/stock_us_daily?symbol={}&adjust=qfq",
+        url, symbol
+    );
+    info!("Get stock daily price from akshare: {}", url);
+
+    let response = Request::get_response(&url).await?;
+    let data: Value = response.json().await?;
+    let kline = data.as_array();
+
+    let mut stock_prices = Vec::new();
+    if let Some(kline) = kline {
+        for k in kline {
+            let date_str = k["date"].as_str().unwrap();
+            let datetime = NaiveDateTime::parse_from_str(date_str, "%Y-%m-%dT%H:%M:%S.%f");
+            let date = datetime?.format("%Y%m%d").to_string();
+            let price = StockDailyPriceDTO {
+                d: date,
+                o: k["open"].as_f64().unwrap().to_string(),
+                c: k["close"].as_f64().unwrap().to_string(),
+                l: k["low"].as_f64().unwrap().to_string(),
+                h: k["high"].as_f64().unwrap().to_string(),
+                zd: "".to_string(),
+                zdf: "".to_string(),
+                v: k["volume"].as_number().unwrap().to_string(),
+                e: "".to_string(),
+                hs: "".to_string(),
+            };
+            let price = create_stock_daily_price(&stock.code, &price);
+            stock_prices.push(price);
+        }
+    }
+
+    Ok(stock_prices)
 }
