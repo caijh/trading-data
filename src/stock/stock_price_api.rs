@@ -655,7 +655,11 @@ async fn get_current_price_from_nasdaq(
     let mut pc: String;
     let mut ud: String;
     let update_time: String;
-    if market_status == "Closed" || market_status == "Open" || market_status == "After-Hours" {
+    if market_status == "Closed"
+        || market_status == "Open"
+        || market_status == "After-Hours"
+        || market_status == "Pre-Market"
+    {
         price = primary_data["lastSalePrice"].as_str().unwrap().to_string();
         v = primary_data["volume"].as_str().unwrap().to_string();
         pc = primary_data["percentageChange"]

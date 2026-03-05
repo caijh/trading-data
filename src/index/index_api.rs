@@ -187,7 +187,7 @@ async fn get_spx_stocks_from_wikipedia(exchange: &Exchange) -> Result<Vec<Stock>
                 name,
                 exchange: exchange.as_ref().to_string(),
                 stock_type: "Stock".to_string(),
-                stock_code: code.replace(".", "/"),
+                stock_code: code,
             };
             stocks.push(stock);
         }
