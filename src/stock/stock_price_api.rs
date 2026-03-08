@@ -85,6 +85,43 @@ fn to_akshare_symbol(exchange: &Exchange, stock_code: &str) -> String {
     }
 }
 
+/// Helper function to parse akshare kline data and convert to StockDailyPrice
+async fn parse_akshare_kline(
+    url: &str,
+    stock_code: &str,
+) -> Result<Vec<StockDailyPrice>, Box<dyn Error>> {
+    info!("Get stock daily price from akshare: {}", url);
+
+    let response = Request::get_response(url).await?;
+    let data: Value = response.json().await?;
+    let kline = data.as_array();
+
+    let mut stock_prices = Vec::new();
+    if let Some(kline) = kline {
+        stock_prices.reserve(kline.len());
+        for k in kline {
+            let date_str = k["date"].as_str().unwrap();
+            let date = iso_date_to_u64(date_str)?;
+            let price = StockDailyPriceDTO {
+                d: date.to_string(),
+                o: k["open"].as_f64().unwrap().to_string(),
+                c: k["close"].as_f64().unwrap().to_string(),
+                l: k["low"].as_f64().unwrap().to_string(),
+                h: k["high"].as_f64().unwrap().to_string(),
+                zd: String::new(),
+                zdf: String::new(),
+                v: k["volume"].as_number().unwrap().to_string(),
+                e: String::new(),
+                hs: String::new(),
+            };
+            let price = create_stock_daily_price(stock_code, &price);
+            stock_prices.push(price);
+        }
+    }
+
+    Ok(stock_prices)
+}
+
 #[async_trait]
 pub trait StockPriceApi {
     async fn get_stock_price(
@@ -378,41 +415,11 @@ async fn get_stock_daily_price_from_akshare_zh_a(
 ) -> Result<Vec<StockDailyPrice>, Box<dyn Error>> {
     let base_url = get_akshare_base_url().await?;
     let symbol = to_akshare_symbol(exchange, &stock.stock_code);
-
     let url = format!(
         "{}/api/public/stock_zh_a_daily?symbol={}&adjust=qfq",
         base_url, symbol
     );
-    info!("Get stock daily price from akshare: {}", url);
-
-    let response = Request::get_response(&url).await?;
-    let data: Value = response.json().await?;
-    let kline = data.as_array();
-
-    let mut stock_prices = Vec::new();
-    if let Some(kline) = kline {
-        stock_prices.reserve(kline.len());
-        for k in kline {
-            let date_str = k["date"].as_str().unwrap();
-            let date = iso_date_to_u64(date_str)?;
-            let price = StockDailyPriceDTO {
-                d: date.to_string(),
-                o: k["open"].as_f64().unwrap().to_string(),
-                c: k["close"].as_f64().unwrap().to_string(),
-                l: k["low"].as_f64().unwrap().to_string(),
-                h: k["high"].as_f64().unwrap().to_string(),
-                zd: String::new(),
-                zdf: String::new(),
-                v: k["volume"].as_f64().unwrap().to_string(),
-                e: String::new(),
-                hs: String::new(),
-            };
-            let price = create_stock_daily_price(&stock.code, &price);
-            stock_prices.push(price);
-        }
-    }
-
-    Ok(stock_prices)
+    parse_akshare_kline(&url, &stock.code).await
 }
 
 pub async fn get_stock_daily_price(
@@ -465,36 +472,7 @@ async fn get_index_stock_daily_price_from_akshare(
         "{}/api/public/index_us_stock_sina?symbol={}",
         base_url, symbol
     );
-    info!("Get stock daily price from akshare: {}", url);
-
-    let response = Request::get_response(&url).await?;
-    let data: Value = response.json().await?;
-    let kline = data.as_array();
-
-    let mut stock_prices = Vec::new();
-    if let Some(kline) = kline {
-        stock_prices.reserve(kline.len());
-        for k in kline {
-            let date_str = k["date"].as_str().unwrap();
-            let date = iso_date_to_u64(date_str)?;
-            let price = StockDailyPriceDTO {
-                d: date.to_string(),
-                o: k["open"].as_f64().unwrap().to_string(),
-                c: k["close"].as_f64().unwrap().to_string(),
-                l: k["low"].as_f64().unwrap().to_string(),
-                h: k["high"].as_f64().unwrap().to_string(),
-                zd: String::new(),
-                zdf: String::new(),
-                v: k["volume"].as_number().unwrap().to_string(),
-                e: String::new(),
-                hs: String::new(),
-            };
-            let price = create_stock_daily_price(&stock.code, &price);
-            stock_prices.push(price);
-        }
-    }
-
-    Ok(stock_prices)
+    parse_akshare_kline(&url, &stock.code).await
 }
 
 async fn get_stock_daily_price_from_nasdaq(
@@ -841,34 +819,5 @@ async fn get_stock_daily_price_from_akshare(
         "{}/api/public/stock_us_daily?symbol={}&adjust=qfq",
         base_url, stock.stock_code
     );
-    info!("Get stock daily price from akshare: {}", url);
-
-    let response = Request::get_response(&url).await?;
-    let data: Value = response.json().await?;
-    let kline = data.as_array();
-
-    let mut stock_prices = Vec::new();
-    if let Some(kline) = kline {
-        stock_prices.reserve(kline.len());
-        for k in kline {
-            let date_str = k["date"].as_str().unwrap();
-            let date = iso_date_to_u64(date_str)?;
-            let price = StockDailyPriceDTO {
-                d: date.to_string(),
-                o: k["open"].as_f64().unwrap().to_string(),
-                c: k["close"].as_f64().unwrap().to_string(),
-                l: k["low"].as_f64().unwrap().to_string(),
-                h: k["high"].as_f64().unwrap().to_string(),
-                zd: String::new(),
-                zdf: String::new(),
-                v: k["volume"].as_number().unwrap().to_string(),
-                e: String::new(),
-                hs: String::new(),
-            };
-            let price = create_stock_daily_price(&stock.code, &price);
-            stock_prices.push(price);
-        }
-    }
-
-    Ok(stock_prices)
+    parse_akshare_kline(&url, &stock.code).await
 }
