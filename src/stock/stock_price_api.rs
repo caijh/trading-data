@@ -348,18 +348,86 @@ async fn get_stock_daily_price_from_hkex(
     Ok(stock_prices)
 }
 
+async fn get_stock_daily_price_from_akshare_zh_a(
+    exchange: &Exchange,
+    stock: &stock_model::Model,
+) -> Result<Vec<StockDailyPrice>, Box<dyn Error>> {
+    let application_context = APPLICATION_CONTEXT.read().await;
+    let environment = application_context.get_environment().await;
+    let base_url = environment
+        .get_property::<String>("stock.api.akshare.baseurl")
+        .unwrap();
+
+    // Transform stock code to akshare format
+    // SSE: sh000001 (stock_code without prefix -> sh + stock_code)
+    // SZSE: sz000049 (stock_code without prefix -> sz + stock_code)
+    let symbol = match exchange {
+        Exchange::SSE => format!("sh{}", stock.stock_code),
+        Exchange::SZSE => format!("sz{}", stock.stock_code),
+        _ => stock.stock_code.clone(),
+    };
+
+    let url = format!(
+        "{}/api/public/stock_zh_a_daily?symbol={}&adjust=qfq",
+        base_url, symbol
+    );
+    info!("Get stock daily price from akshare: {}", url);
+
+    let response = Request::get_response(&url).await?;
+    let data: Value = response.json().await?;
+    let kline = data.as_array();
+
+    let mut stock_prices = Vec::new();
+    if let Some(kline) = kline {
+        for k in kline {
+            let date_str = k["date"].as_str().unwrap();
+            let datetime = NaiveDateTime::parse_from_str(date_str, "%Y-%m-%dT%H:%M:%S.%f");
+            let date = datetime?.format("%Y%m%d").to_string();
+            let price = StockDailyPriceDTO {
+                d: date,
+                o: k["open"].as_f64().unwrap().to_string(),
+                c: k["close"].as_f64().unwrap().to_string(),
+                l: k["low"].as_f64().unwrap().to_string(),
+                h: k["high"].as_f64().unwrap().to_string(),
+                zd: "".to_string(),
+                zdf: "".to_string(),
+                v: k["volume"].as_f64().unwrap().to_string(),
+                e: "".to_string(),
+                hs: "".to_string(),
+            };
+            let price = create_stock_daily_price(&stock.code, &price);
+            stock_prices.push(price);
+        }
+    }
+
+    Ok(stock_prices)
+}
+
 pub async fn get_stock_daily_price(
     stock: &stock_model::Model,
 ) -> Result<Vec<StockDailyPrice>, Box<dyn Error>> {
     let exchange = Exchange::from_str(stock.exchange.as_str())?;
     info!(
-        "Get stock daily price from {}, code = {}",
+        "Get stock daily price from {}, code = {}, type = {}",
         exchange.as_ref(),
-        stock.stock_code
+        stock.stock_code,
+        stock.stock_type
     );
     match exchange {
-        Exchange::SSE => get_stock_daily_price_from_sse(stock).await,
-        Exchange::SZSE => get_stock_daily_price_from_szse(stock).await,
+        Exchange::SSE => {
+            if stock.stock_type == "Stock" {
+                get_stock_daily_price_from_akshare_zh_a(&exchange, stock).await
+            } else {
+                get_stock_daily_price_from_sse(stock).await
+            }
+        }
+        Exchange::SZSE => {
+            if stock.stock_type == "Stock" {
+                get_stock_daily_price_from_akshare_zh_a(&exchange, stock).await
+            } else {
+                get_stock_daily_price_from_szse(stock).await
+            }
+        }
         Exchange::HKEX => get_stock_daily_price_from_hkex(stock).await,
         Exchange::NASDAQ => {
             let code = &stock.code;
