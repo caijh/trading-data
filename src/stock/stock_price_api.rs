@@ -61,6 +61,30 @@ fn create_stock_daily_price(code: &str, dto: &StockDailyPriceDTO) -> StockDailyP
     }
 }
 
+/// Helper function to convert ISO date string to u64 date format
+fn iso_date_to_u64(date_str: &str) -> Result<u64, Box<dyn Error>> {
+    let datetime = NaiveDateTime::parse_from_str(date_str, "%Y-%m-%dT%H:%M:%S.%f")?;
+    Ok(datetime.format("%Y%m%d").to_string().parse::<u64>()?)
+}
+
+/// Helper function to get akshare base URL from environment
+async fn get_akshare_base_url() -> Result<String, Box<dyn Error>> {
+    let application_context = APPLICATION_CONTEXT.read().await;
+    let environment = application_context.get_environment().await;
+    environment
+        .get_property::<String>("stock.api.akshare.baseurl")
+        .ok_or_else(|| "Missing property: stock.api.akshare.baseurl".into())
+}
+
+/// Helper function to transform stock code to akshare format
+fn to_akshare_symbol(exchange: &Exchange, stock_code: &str) -> String {
+    match exchange {
+        Exchange::SSE => format!("sh{}", stock_code),
+        Exchange::SZSE => format!("sz{}", stock_code),
+        _ => stock_code.to_string(),
+    }
+}
+
 #[async_trait]
 pub trait StockPriceApi {
     async fn get_stock_price(
@@ -352,20 +376,8 @@ async fn get_stock_daily_price_from_akshare_zh_a(
     exchange: &Exchange,
     stock: &stock_model::Model,
 ) -> Result<Vec<StockDailyPrice>, Box<dyn Error>> {
-    let application_context = APPLICATION_CONTEXT.read().await;
-    let environment = application_context.get_environment().await;
-    let base_url = environment
-        .get_property::<String>("stock.api.akshare.baseurl")
-        .unwrap();
-
-    // Transform stock code to akshare format
-    // SSE: sh000001 (stock_code without prefix -> sh + stock_code)
-    // SZSE: sz000049 (stock_code without prefix -> sz + stock_code)
-    let symbol = match exchange {
-        Exchange::SSE => format!("sh{}", stock.stock_code),
-        Exchange::SZSE => format!("sz{}", stock.stock_code),
-        _ => stock.stock_code.clone(),
-    };
+    let base_url = get_akshare_base_url().await?;
+    let symbol = to_akshare_symbol(exchange, &stock.stock_code);
 
     let url = format!(
         "{}/api/public/stock_zh_a_daily?symbol={}&adjust=qfq",
@@ -379,21 +391,21 @@ async fn get_stock_daily_price_from_akshare_zh_a(
 
     let mut stock_prices = Vec::new();
     if let Some(kline) = kline {
+        stock_prices.reserve(kline.len());
         for k in kline {
             let date_str = k["date"].as_str().unwrap();
-            let datetime = NaiveDateTime::parse_from_str(date_str, "%Y-%m-%dT%H:%M:%S.%f");
-            let date = datetime?.format("%Y%m%d").to_string();
+            let date = iso_date_to_u64(date_str)?;
             let price = StockDailyPriceDTO {
-                d: date,
+                d: date.to_string(),
                 o: k["open"].as_f64().unwrap().to_string(),
                 c: k["close"].as_f64().unwrap().to_string(),
                 l: k["low"].as_f64().unwrap().to_string(),
                 h: k["high"].as_f64().unwrap().to_string(),
-                zd: "".to_string(),
-                zdf: "".to_string(),
+                zd: String::new(),
+                zdf: String::new(),
                 v: k["volume"].as_f64().unwrap().to_string(),
-                e: "".to_string(),
-                hs: "".to_string(),
+                e: String::new(),
+                hs: String::new(),
             };
             let price = create_stock_daily_price(&stock.code, &price);
             stock_prices.push(price);
@@ -448,12 +460,11 @@ async fn get_index_stock_daily_price_from_akshare(
     stock: &stock_model::Model,
     symbol: &str,
 ) -> Result<Vec<StockDailyPrice>, Box<dyn Error>> {
-    let application_context = APPLICATION_CONTEXT.read().await;
-    let environment = application_context.get_environment().await;
-    let url = environment
-        .get_property::<String>("stock.api.akshare.baseurl")
-        .unwrap();
-    let url = format!("{}/api/public/index_us_stock_sina?symbol={}", url, symbol);
+    let base_url = get_akshare_base_url().await?;
+    let url = format!(
+        "{}/api/public/index_us_stock_sina?symbol={}",
+        base_url, symbol
+    );
     info!("Get stock daily price from akshare: {}", url);
 
     let response = Request::get_response(&url).await?;
@@ -462,21 +473,21 @@ async fn get_index_stock_daily_price_from_akshare(
 
     let mut stock_prices = Vec::new();
     if let Some(kline) = kline {
+        stock_prices.reserve(kline.len());
         for k in kline {
             let date_str = k["date"].as_str().unwrap();
-            let datetime = NaiveDateTime::parse_from_str(date_str, "%Y-%m-%dT%H:%M:%S.%f");
-            let date = datetime?.format("%Y%m%d").to_string();
+            let date = iso_date_to_u64(date_str)?;
             let price = StockDailyPriceDTO {
-                d: date,
+                d: date.to_string(),
                 o: k["open"].as_f64().unwrap().to_string(),
                 c: k["close"].as_f64().unwrap().to_string(),
                 l: k["low"].as_f64().unwrap().to_string(),
                 h: k["high"].as_f64().unwrap().to_string(),
-                zd: "".to_string(),
-                zdf: "".to_string(),
+                zd: String::new(),
+                zdf: String::new(),
                 v: k["volume"].as_number().unwrap().to_string(),
-                e: "".to_string(),
-                hs: "".to_string(),
+                e: String::new(),
+                hs: String::new(),
             };
             let price = create_stock_daily_price(&stock.code, &price);
             stock_prices.push(price);
@@ -825,16 +836,10 @@ async fn get_stock_daily_price_from_akshare(
     _exchange: &Exchange,
     stock: &stock_model::Model,
 ) -> Result<Vec<StockDailyPrice>, Box<dyn Error>> {
-    let application_context = APPLICATION_CONTEXT.read().await;
-    let environment = application_context.get_environment().await;
-    let url = environment
-        .get_property::<String>("stock.api.akshare.baseurl")
-        .unwrap();
-
-    let symbol = &stock.stock_code;
+    let base_url = get_akshare_base_url().await?;
     let url = format!(
         "{}/api/public/stock_us_daily?symbol={}&adjust=qfq",
-        url, symbol
+        base_url, stock.stock_code
     );
     info!("Get stock daily price from akshare: {}", url);
 
@@ -844,21 +849,21 @@ async fn get_stock_daily_price_from_akshare(
 
     let mut stock_prices = Vec::new();
     if let Some(kline) = kline {
+        stock_prices.reserve(kline.len());
         for k in kline {
             let date_str = k["date"].as_str().unwrap();
-            let datetime = NaiveDateTime::parse_from_str(date_str, "%Y-%m-%dT%H:%M:%S.%f");
-            let date = datetime?.format("%Y%m%d").to_string();
+            let date = iso_date_to_u64(date_str)?;
             let price = StockDailyPriceDTO {
-                d: date,
+                d: date.to_string(),
                 o: k["open"].as_f64().unwrap().to_string(),
                 c: k["close"].as_f64().unwrap().to_string(),
                 l: k["low"].as_f64().unwrap().to_string(),
                 h: k["high"].as_f64().unwrap().to_string(),
-                zd: "".to_string(),
-                zdf: "".to_string(),
+                zd: String::new(),
+                zdf: String::new(),
                 v: k["volume"].as_number().unwrap().to_string(),
-                e: "".to_string(),
-                hs: "".to_string(),
+                e: String::new(),
+                hs: String::new(),
             };
             let price = create_stock_daily_price(&stock.code, &price);
             stock_prices.push(price);
