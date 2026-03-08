@@ -161,6 +161,193 @@ async fn get_current_price_from_szse(code: &str) -> Result<StockPriceDTO, Box<dy
     })
 }
 
+async fn get_stock_daily_price_from_sse(
+    stock: &stock_model::Model,
+) -> Result<Vec<StockDailyPrice>, Box<dyn Error>> {
+    let application_context = APPLICATION_CONTEXT.read().await;
+    let environment = application_context.get_environment().await;
+    let mut stock_prices = Vec::new();
+    let url = environment
+        .get_property::<String>("stock.api.sh.baseurl")
+        .unwrap();
+    let url = format!(
+        "{}/v1/sh1/dayk/{}?begin=-1000&end=-1&period=day&_={}",
+        url,
+        &stock.stock_code,
+        Local::now().timestamp_millis()
+    );
+    let response = Request::get_response(&url).await?;
+    let json: Value = response.json().await?;
+    let kline = json.get("kline").unwrap().as_array();
+    if let Some(kline) = kline {
+        for k in kline {
+            let k = k.as_array().unwrap();
+            let price = StockDailyPriceDTO {
+                d: k.first().unwrap().to_string(),
+                o: k.get(1).unwrap().to_string(),
+                h: k.get(2).unwrap().to_string(),
+                l: k.get(3).unwrap().to_string(),
+                c: k.get(4).unwrap().to_string(),
+                v: k.get(5).unwrap().to_string(),
+                e: k.get(6).unwrap().to_string(),
+                zd: "".to_string(),
+                zdf: "".to_string(),
+                hs: "".to_string(),
+            };
+            let price = create_stock_daily_price(&stock.code, &price);
+            stock_prices.push(price);
+        }
+    }
+    Ok(stock_prices)
+}
+
+async fn get_stock_daily_price_from_szse(
+    stock: &stock_model::Model,
+) -> Result<Vec<StockDailyPrice>, Box<dyn Error>> {
+    let application_context = APPLICATION_CONTEXT.read().await;
+    let environment = application_context.get_environment().await;
+    let mut stock_prices = Vec::new();
+    let url = environment
+        .get_property::<String>("stock.api.sz.baseurl")
+        .unwrap();
+    let url = format!(
+        "{}/api/market/ssjjhq/getHistoryData?random={}&cycleType=32&marketId=1&code={}",
+        url,
+        rng().random::<f64>(),
+        &stock.stock_code
+    );
+    let response = Request::get_response(&url).await?;
+    let json: Value = response.json().await?;
+    let kline = json
+        .get("data")
+        .unwrap()
+        .get("picupdata")
+        .unwrap()
+        .as_array();
+
+    if let Some(kline) = kline {
+        for k in kline {
+            let k = k.as_array().unwrap();
+            let price = StockDailyPriceDTO {
+                d: k.first()
+                    .unwrap()
+                    .as_str()
+                    .unwrap()
+                    .to_string()
+                    .replace('-', ""),
+                o: k.get(1).unwrap().as_str().unwrap().to_string(),
+                c: k.get(2).unwrap().as_str().unwrap().to_string(),
+                l: k.get(3).unwrap().as_str().unwrap().to_string(),
+                h: k.get(4).unwrap().as_str().unwrap().to_string(),
+                zd: k.get(5).unwrap().as_str().unwrap().to_string(),
+                zdf: k.get(6).unwrap().as_str().unwrap().to_string(),
+                v: k.get(7).unwrap().to_string(),
+                e: k.get(8).unwrap().to_string(),
+                hs: "".to_string(),
+            };
+            let price = create_stock_daily_price(&stock.code, &price);
+            stock_prices.push(price);
+        }
+    }
+    Ok(stock_prices)
+}
+
+async fn get_stock_daily_price_from_hkex(
+    stock: &stock_model::Model,
+) -> Result<Vec<StockDailyPrice>, Box<dyn Error>> {
+    let exchange = Exchange::from_str(stock.exchange.as_str())?;
+    let application_context = APPLICATION_CONTEXT.read().await;
+    let environment = application_context.get_environment().await;
+    let mut stock_prices = Vec::new();
+    let url = environment
+        .get_property::<String>("stock.api.hk.baseurl")
+        .unwrap();
+    let token = token_svc::get_hkex_token().await;
+    let timestramp = Local::now().timestamp_millis();
+    let code = if stock.stock_type == "Index" {
+        format!(".{}", stock.stock_code)
+    } else {
+        format!("{:0>4}.HK", stock.stock_code)
+    };
+    let url = format!(
+        "{}/hkexwidget/data/getchartdata2?hchart=1&span=6&int=5&ric={}&token={}&qid={}&callback=jQuery_{}&_={}",
+        url, code, token, timestramp, timestramp, timestramp,
+    );
+    let response = Request::get_response(&url).await?;
+    let text = response.text().await?;
+    let json = remove_jquery_wrapping_fn_call(&text);
+    let kline = json
+        .get("data")
+        .unwrap()
+        .get("datalist")
+        .unwrap()
+        .as_array();
+    if let Some(kline) = kline {
+        let mut dates = Vec::new();
+        for k in kline {
+            let k = k.as_array().unwrap();
+            let o = k.get(1).unwrap();
+            if o.is_null() {
+                continue;
+            }
+            if o.as_f64().unwrap() < 0.0 {
+                continue;
+            }
+            let o = o.as_number().unwrap().to_string();
+            let dt: DateTime<Utc> =
+                DateTime::from_timestamp_millis(k.first().unwrap().as_i64().unwrap()).unwrap();
+            let date = dt.with_timezone(&Local).format("%Y%m%d").to_string();
+            dates.push(date.clone());
+            let price = StockDailyPriceDTO {
+                d: date,
+                o,
+                c: k.get(4).unwrap().as_number().unwrap().to_string(),
+                l: k.get(3).unwrap().as_number().unwrap().to_string(),
+                h: k.get(2).unwrap().as_number().unwrap().to_string(),
+                zd: "".to_string(),
+                zdf: "".to_string(),
+                v: k.get(5).unwrap().as_number().unwrap().to_string(),
+                e: k.get(6).unwrap().as_number().unwrap().to_string(),
+                hs: "".to_string(),
+            };
+            let price = create_stock_daily_price(&stock.code, &price);
+            stock_prices.push(price);
+        }
+        let date = Local::now().format("%Y%m%d").to_string();
+        let holiday_result = today_is_holiday(exchange.as_ref()).await?;
+        // new time from Local::now with 9:30
+        let open_time = Local::now()
+            .with_time(NaiveTime::from_hms_opt(9, 30, 0).unwrap())
+            .unwrap();
+        if stock.stock_type == "Stock"
+            && Local::now() > open_time
+            && !dates.contains(&date)
+            && !holiday_result
+        {
+            // append today price
+            let stock_price = exchange.get_stock_price(&stock).await?;
+            let date = NaiveDateTime::parse_from_str(&stock_price.t, "%Y-%m-%d %H:%M:%S")?
+                .format("%Y%m%d")
+                .to_string();
+            let dto = StockDailyPriceDTO {
+                d: date,
+                o: stock_price.o,
+                h: stock_price.h,
+                l: stock_price.l,
+                c: stock_price.p,
+                v: stock_price.v,
+                e: stock_price.cje,
+                zd: stock_price.ud,
+                zdf: stock_price.pc,
+                hs: "".to_string(),
+            };
+            let price = create_stock_daily_price(&stock.code, &dto);
+            stock_prices.push(price);
+        }
+    }
+    Ok(stock_prices)
+}
+
 pub async fn get_stock_daily_price(
     stock: &stock_model::Model,
 ) -> Result<Vec<StockDailyPrice>, Box<dyn Error>> {
@@ -170,179 +357,10 @@ pub async fn get_stock_daily_price(
         exchange.as_ref(),
         stock.stock_code
     );
-    let application_context = APPLICATION_CONTEXT.read().await;
-    let environment = application_context.get_environment().await;
-    let mut stock_prices = Vec::new();
     match exchange {
-        Exchange::SSE => {
-            let url = environment
-                .get_property::<String>("stock.api.sh.baseurl")
-                .unwrap();
-            let url = format!(
-                "{}/v1/sh1/dayk/{}?begin=-1000&end=-1&period=day&_={}",
-                url,
-                &stock.stock_code,
-                Local::now().timestamp_millis()
-            );
-            let response = Request::get_response(&url).await?;
-            let json: Value = response.json().await?;
-            let kline = json.get("kline").unwrap().as_array();
-            if let Some(kline) = kline {
-                for k in kline {
-                    let k = k.as_array().unwrap();
-                    let price = StockDailyPriceDTO {
-                        d: k.first().unwrap().to_string(),
-                        o: k.get(1).unwrap().to_string(),
-                        h: k.get(2).unwrap().to_string(),
-                        l: k.get(3).unwrap().to_string(),
-                        c: k.get(4).unwrap().to_string(),
-                        v: k.get(5).unwrap().to_string(),
-                        e: k.get(6).unwrap().to_string(),
-                        zd: "".to_string(),
-                        zdf: "".to_string(),
-                        hs: "".to_string(),
-                    };
-                    let price = create_stock_daily_price(&stock.code, &price);
-                    stock_prices.push(price);
-                }
-            }
-            Ok(stock_prices)
-        }
-        Exchange::SZSE => {
-            let url = environment
-                .get_property::<String>("stock.api.sz.baseurl")
-                .unwrap();
-            let url = format!(
-                "{}/api/market/ssjjhq/getHistoryData?random={}&cycleType=32&marketId=1&code={}",
-                url,
-                rng().random::<f64>(),
-                &stock.stock_code
-            );
-            let response = Request::get_response(&url).await?;
-            let json: Value = response.json().await?;
-            let kline = json
-                .get("data")
-                .unwrap()
-                .get("picupdata")
-                .unwrap()
-                .as_array();
-
-            if let Some(kline) = kline {
-                for k in kline {
-                    let k = k.as_array().unwrap();
-                    let price = StockDailyPriceDTO {
-                        d: k.first()
-                            .unwrap()
-                            .as_str()
-                            .unwrap()
-                            .to_string()
-                            .replace('-', ""),
-                        o: k.get(1).unwrap().as_str().unwrap().to_string(),
-                        c: k.get(2).unwrap().as_str().unwrap().to_string(),
-                        l: k.get(3).unwrap().as_str().unwrap().to_string(),
-                        h: k.get(4).unwrap().as_str().unwrap().to_string(),
-                        zd: k.get(5).unwrap().as_str().unwrap().to_string(),
-                        zdf: k.get(6).unwrap().as_str().unwrap().to_string(),
-                        v: k.get(7).unwrap().to_string(),
-                        e: k.get(8).unwrap().to_string(),
-                        hs: "".to_string(),
-                    };
-                    let price = create_stock_daily_price(&stock.code, &price);
-                    stock_prices.push(price);
-                }
-            }
-            Ok(stock_prices)
-        }
-        Exchange::HKEX => {
-            let url = environment
-                .get_property::<String>("stock.api.hk.baseurl")
-                .unwrap();
-            let token = token_svc::get_hkex_token().await;
-            let timestramp = Local::now().timestamp_millis();
-            let code = if stock.stock_type == "Index" {
-                format!(".{}", stock.stock_code)
-            } else {
-                format!("{:0>4}.HK", stock.stock_code)
-            };
-            let url = format!(
-                "{}/hkexwidget/data/getchartdata2?hchart=1&span=6&int=5&ric={}&token={}&qid={}&callback=jQuery_{}&_={}",
-                url, code, token, timestramp, timestramp, timestramp,
-            );
-            let response = Request::get_response(&url).await?;
-            let text = response.text().await?;
-            let json = remove_jquery_wrapping_fn_call(&text);
-            let kline = json
-                .get("data")
-                .unwrap()
-                .get("datalist")
-                .unwrap()
-                .as_array();
-            if let Some(kline) = kline {
-                let mut dates = Vec::new();
-                for k in kline {
-                    let k = k.as_array().unwrap();
-                    let o = k.get(1).unwrap();
-                    if o.is_null() {
-                        continue;
-                    }
-                    if o.as_f64().unwrap() < 0.0 {
-                        continue;
-                    }
-                    let o = o.as_number().unwrap().to_string();
-                    let dt: DateTime<Utc> =
-                        DateTime::from_timestamp_millis(k.first().unwrap().as_i64().unwrap())
-                            .unwrap();
-                    let date = dt.with_timezone(&Local).format("%Y%m%d").to_string();
-                    dates.push(date.clone());
-                    let price = StockDailyPriceDTO {
-                        d: date,
-                        o,
-                        c: k.get(4).unwrap().as_number().unwrap().to_string(),
-                        l: k.get(3).unwrap().as_number().unwrap().to_string(),
-                        h: k.get(2).unwrap().as_number().unwrap().to_string(),
-                        zd: "".to_string(),
-                        zdf: "".to_string(),
-                        v: k.get(5).unwrap().as_number().unwrap().to_string(),
-                        e: k.get(6).unwrap().as_number().unwrap().to_string(),
-                        hs: "".to_string(),
-                    };
-                    let price = create_stock_daily_price(&stock.code, &price);
-                    stock_prices.push(price);
-                }
-                let date = Local::now().format("%Y%m%d").to_string();
-                let holiday_result = today_is_holiday(exchange.as_ref()).await?;
-                // new time from Local::now with 9:30
-                let open_time = Local::now()
-                    .with_time(NaiveTime::from_hms_opt(9, 30, 0).unwrap())
-                    .unwrap();
-                if stock.stock_type == "Stock"
-                    && Local::now() > open_time
-                    && !dates.contains(&date)
-                    && !holiday_result
-                {
-                    // append today price
-                    let stock_price = exchange.get_stock_price(&stock).await?;
-                    let date = NaiveDateTime::parse_from_str(&stock_price.t, "%Y-%m-%d %H:%M:%S")?
-                        .format("%Y%m%d")
-                        .to_string();
-                    let dto = StockDailyPriceDTO {
-                        d: date,
-                        o: stock_price.o,
-                        h: stock_price.h,
-                        l: stock_price.l,
-                        c: stock_price.p,
-                        v: stock_price.v,
-                        e: stock_price.cje,
-                        zd: stock_price.ud,
-                        zdf: stock_price.pc,
-                        hs: "".to_string(),
-                    };
-                    let price = create_stock_daily_price(&stock.code, &dto);
-                    stock_prices.push(price);
-                }
-            }
-            Ok(stock_prices)
-        }
+        Exchange::SSE => get_stock_daily_price_from_sse(stock).await,
+        Exchange::SZSE => get_stock_daily_price_from_szse(stock).await,
+        Exchange::HKEX => get_stock_daily_price_from_hkex(stock).await,
         Exchange::NASDAQ => {
             let code = &stock.code;
             if code == "NDX.NS" || code == "SPX.NS" {
