@@ -13,7 +13,7 @@ use tracing::info;
 use util::request::Request;
 
 use crate::exchange::exchange_model::Exchange;
-use crate::holiday::holiday_svc::today_is_holiday;
+use crate::holiday::holiday_svc::is_holiday;
 use crate::stock::stock_model;
 use crate::token::token_svc;
 
@@ -375,7 +375,7 @@ async fn get_stock_daily_price_from_hkex(
             stock_prices.push(price);
         }
         let date = Local::now().format("%Y%m%d").to_string();
-        let holiday_result = today_is_holiday(exchange.as_ref()).await?;
+        let holiday_result = is_holiday(exchange.as_ref()).await?;
         // new time from Local::now with 9:30
         let open_time = Local::now()
             .with_time(NaiveTime::from_hms_opt(9, 30, 0).unwrap())

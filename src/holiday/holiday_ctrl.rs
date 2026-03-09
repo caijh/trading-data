@@ -19,7 +19,7 @@ struct HolidayParams {
 /// 最后，将结果封装在`RespBody`中，并作为响应返回。
 #[get("/holiday/today")]
 async fn today_is_holiday(Query(params): Query<HolidayParams>) -> impl IntoResponse {
-    let r = holiday_svc::today_is_holiday(&params.exchange).await;
+    let r = holiday_svc::is_holiday(&params.exchange).await;
 
     RespBody::result(&r).response()
 }
