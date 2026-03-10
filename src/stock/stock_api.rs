@@ -157,7 +157,6 @@ pub async fn get_earnings_surprise(code: &str) -> Result<Vec<EarningsSurpriseRow
     }
 
     let earnings_response: EarningsSurpriseResponse = response.json().await?;
-    info!("Earnings surprise data: {:?}", earnings_response);
 
     // Extract rows from the JSON response
     let rows_value = earnings_response
