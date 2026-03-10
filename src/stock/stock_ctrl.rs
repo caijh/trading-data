@@ -33,3 +33,10 @@ async fn stock_daily_price(Query(params): Query<StockParams>) -> impl IntoRespon
     let r = stock_svc::get_stock_prices(&params.code).await;
     RespBody::result(&r).response()
 }
+
+#[get("/stock/earnings-surprise")]
+async fn earnings_surprise(Query(params): Query<StockParams>) -> impl IntoResponse {
+    info!("Get earnings surprise, code = {}", params.code);
+    let r = stock_svc::get_earnings_surprise(&params.code).await;
+    RespBody::result(&r).response()
+}

@@ -6,7 +6,7 @@ use crate::index::index_job::SyncIndexStocksJob;
 use crate::stock::stock_api::StockApi;
 use crate::stock::stock_model::{Model as Stock, StockKind, StockPrice};
 use crate::stock::stock_price_api::{StockDailyPrice, StockPriceApi};
-use crate::stock::{stock_cache, stock_dao, stock_model, stock_price_api};
+use crate::stock::{stock_api, stock_cache, stock_dao, stock_model, stock_price_api};
 use application_beans::factory::bean_factory::BeanFactory;
 use application_context::context::application_context::APPLICATION_CONTEXT;
 use application_core::lang::runnable::Runnable;
@@ -214,4 +214,24 @@ pub async fn get_stock_price(code: &str) -> Result<StockPrice, Box<dyn Error>> {
 
 pub async fn get_stock(code: &str) -> Result<Stock, Box<dyn Error>> {
     stock_cache::get_stock(code).await
+}
+
+/// Get earnings surprise data for NASDAQ stocks
+pub async fn get_earnings_surprise(
+    code: &str,
+) -> Result<Vec<stock_api::EarningsSurpriseRow>, Box<dyn Error>> {
+    let stock = get_stock(code).await?;
+
+    // Only NASDAQ stocks have earnings surprise data
+    if stock.exchange != Exchange::NASDAQ.as_ref() {
+        return Err(format!(
+            "Earnings surprise data is only available for NASDAQ stocks, got {}",
+            stock.exchange
+        )
+        .into());
+    }
+
+    // Use the stock_code (without suffix) for the API call
+    let earnings_data = stock_api::get_earnings_surprise(&stock.stock_code).await?;
+    Ok(earnings_data)
 }

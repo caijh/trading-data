@@ -1,15 +1,19 @@
 use crate::exchange::exchange_model::Exchange;
 use crate::index::index_api::IndexApi;
 use crate::stock::stock_model::{Model, StockKind};
+use application_context::context::application_context::APPLICATION_CONTEXT;
+use application_core::env::property_resolver::PropertyResolver;
 use async_trait::async_trait;
 use calamine::{Reader, Xls, Xlsx, open_workbook};
 use rand::{Rng, rng};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::error::Error;
 use std::fs::File;
 use std::io::copy;
 use std::path::Path;
 use tempfile::tempdir;
+use tracing::info;
 use util::request::Request;
 
 #[async_trait]
@@ -107,15 +111,72 @@ async fn get_stock_from_hk() -> Result<Vec<Model>, Box<dyn Error>> {
     Ok(stocks)
 }
 
+/// Earnings surprise data structure for NASDAQ API response
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EarningsSurpriseResponse {
+    pub data: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EarningsSurpriseTable {
+    pub rows: Vec<EarningsSurpriseRow>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EarningsSurpriseRow {
+    #[serde(rename = "fiscalQtrEnd")]
+    pub fiscal_qtr_end: String,
+    #[serde(rename = "dateReported")]
+    pub date_reported: String,
+    pub eps: f64,
+    #[serde(rename = "consensusForecast")]
+    pub consensus_forecast: String,
+    #[serde(rename = "percentageSurprise")]
+    pub percentage_surprise: String,
+}
+
+/// Fetch earnings surprise data from NASDAQ API
+pub async fn get_earnings_surprise(code: &str) -> Result<Vec<EarningsSurpriseRow>, Box<dyn Error>> {
+    let application_context = APPLICATION_CONTEXT.read().await;
+    let environment = application_context.get_environment().await;
+    let base_url = environment
+        .get_property::<String>("stock.api.nasdaq.baseurl")
+        .unwrap();
+    let url = format!("{}/api/company/{}/earnings-surprise", base_url, code);
+
+    info!("Fetching earnings surprise data from {}", url);
+
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36".parse()?);
+
+    let client = reqwest::Client::builder().build()?;
+    let response = client.get(&url).headers(headers).send().await?;
+
+    if !response.status().is_success() {
+        return Err(format!("Failed to fetch earnings surprise: {}", response.status()).into());
+    }
+
+    let earnings_response: EarningsSurpriseResponse = response.json().await?;
+    info!("Earnings surprise data: {:?}", earnings_response);
+
+    // Extract rows from the JSON response
+    let rows_value = earnings_response
+        .data
+        .get("earningsSurpriseTable")
+        .and_then(|table| table.get("rows"))
+        .ok_or("Missing earningsSurpriseTable.rows in response")?;
+
+    let rows: Vec<EarningsSurpriseRow> = serde_json::from_value(rows_value.clone())?;
+    Ok(rows)
+}
+
 pub async fn download(url: &str, path: &Path) -> Result<(), Box<dyn Error>> {
     let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36".parse().unwrap());
+    headers.insert("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36".parse()?);
     headers.insert("X-Requested-With", "XMLHttpRequest".parse().unwrap());
     headers.insert(
         "Referer",
-        "http://www.sse.com.cn/assortment/stock/list/share/"
-            .parse()
-            .unwrap(),
+        "http://www.sse.com.cn/assortment/stock/list/share/".parse()?,
     );
     headers.insert("Connection", "keep-alive".parse().unwrap());
     let client = reqwest::Client::builder().build().unwrap();
