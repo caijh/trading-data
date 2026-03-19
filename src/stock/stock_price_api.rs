@@ -331,7 +331,7 @@ async fn get_stock_daily_price_from_hkex(
         format!("{:0>4}.HK", stock.stock_code)
     };
     let url = format!(
-        "{}/hkexwidget/data/getchartdata2?hchart=1&span=7&int=7&ric={}&token={}&qid={}&callback=jQuery_{}&_={}",
+        "{}/hkexwidget/data/getchartdata2?hchart=1&span=6&int=7&ric={}&token={}&qid={}&callback=jQuery_{}&_={}",
         url, code, token, timestramp, timestramp, timestramp,
     );
     let response = Request::get_response(&url).await?;
