@@ -29,7 +29,7 @@ impl Runnable for SyncIndexStocksJob {
             Ok(indexes) => {
                 for index in indexes {
                     let constituents = sync_constituents(&index.code).await.unwrap();
-                    if constituents.old.is_empty() {
+                    if constituents.added.is_empty() && constituents.removed.is_empty() {
                         continue;
                     }
                     spawn(notification_index_stocks_changed(index, constituents));
@@ -50,27 +50,31 @@ async fn notification_index_stocks_changed(
     let stocks_add = sync_index_constituents.added;
     let stocks_remove = sync_index_constituents.removed;
     let mut stocks_to_send = Vec::new();
+
+    // 处理新增的股票
     for stock in stocks_add {
         stocks_to_send.push(stock);
         if stocks_to_send.len() == 10 {
-            let _ =
-                do_notification_index_stocks_changed(&index, stocks_to_send.clone(), true).await;
+            let _ = do_notification_index_stocks_changed(&index, stocks_to_send.clone(), true).await;
             stocks_to_send.clear();
         }
     }
     if !stocks_to_send.is_empty() {
-        do_notification_index_stocks_changed(&index, stocks_to_send.clone(), true).await;
+        let _ = do_notification_index_stocks_changed(&index, stocks_to_send.clone(), true).await;
+        stocks_to_send.clear();
     }
+
+    // 处理移除的股票
     for stock in stocks_remove {
         stocks_to_send.push(stock);
         if stocks_to_send.len() == 10 {
-            let _ =
-                do_notification_index_stocks_changed(&index, stocks_to_send.clone(), false).await;
+            let _ = do_notification_index_stocks_changed(&index, stocks_to_send.clone(), false).await;
             stocks_to_send.clear();
         }
     }
     if !stocks_to_send.is_empty() {
-        do_notification_index_stocks_changed(&index, stocks_to_send.clone(), false).await;
+        let _ = do_notification_index_stocks_changed(&index, stocks_to_send.clone(), false).await;
+        stocks_to_send.clear();
     }
 }
 
@@ -82,7 +86,6 @@ async fn do_notification_index_stocks_changed(
     if index_constituents.is_empty() {
         return;
     }
-
     let title = "指数成分股关注-".to_string() + index.name.as_str();
     let mut content = "".to_string();
     let label = if add { "增加" } else { "移除" };
