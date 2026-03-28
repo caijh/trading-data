@@ -6,7 +6,7 @@ use application_core::env::property_resolver::PropertyResolver;
 use async_trait::async_trait;
 use calamine::{Reader, Xlsx, open_workbook};
 use chrono::Local;
-use rand::{Rng, rng};
+use rand::{RngExt, rng};
 use serde_json::Value;
 use std::error::Error;
 use std::path::Path;

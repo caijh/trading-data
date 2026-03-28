@@ -5,7 +5,7 @@ use application_core::env::property_resolver::PropertyResolver;
 use async_trait::async_trait;
 use chrono::{DateTime, Datelike, Months, NaiveDate, TimeZone, Utc};
 use chrono_tz::Tz;
-use rand::{Rng, rng};
+use rand::{RngExt, rng};
 use scraper::{ElementRef, Html, Selector};
 use std::error::Error;
 use util::request::Request;

@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use calamine::Reader;
 use calamine::Xls;
 use calamine::open_workbook;
-use rand::Rng;
+use rand::RngExt;
 use scraper::{Html, Selector};
 use serde_json::Value;
 use std::error::Error;

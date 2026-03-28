@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use bigdecimal::BigDecimal;
 use bigdecimal::num_traits::Bounded;
 use chrono::{DateTime, Duration, Local, NaiveDateTime, NaiveTime, Utc};
-use rand::{Rng, rng};
+use rand::{RngExt, rng};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::error::Error;

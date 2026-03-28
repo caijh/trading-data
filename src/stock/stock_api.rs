@@ -5,7 +5,7 @@ use application_context::context::application_context::APPLICATION_CONTEXT;
 use application_core::env::property_resolver::PropertyResolver;
 use async_trait::async_trait;
 use calamine::{Reader, Xls, Xlsx, open_workbook};
-use rand::{Rng, rng};
+use rand::{RngExt, rng};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::error::Error;
