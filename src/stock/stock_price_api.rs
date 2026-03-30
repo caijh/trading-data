@@ -730,7 +730,7 @@ async fn get_open_price_from_nasdaq(
     let response = client.get(&url).headers(headers).send().await?;
     let data: Value = response.json().await?;
     let latest_intraday_data = data.get("latestIntradayData").unwrap();
-    let open = latest_intraday_data.get("Open").unwrap().as_str().unwrap().to_string();
+    let open = latest_intraday_data.get("Open").unwrap().as_f64().unwrap().to_string();
 
     CacheManager::set_to("OpenPrice", &stock.code, &open, core::time::Duration::from_hours(6)).await;
 
