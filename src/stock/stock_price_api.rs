@@ -1,3 +1,4 @@
+use application_cache::CacheManager;
 use application_context::context::application_context::APPLICATION_CONTEXT;
 use application_core::env::property_resolver::PropertyResolver;
 use async_trait::async_trait;
@@ -146,7 +147,7 @@ impl StockPriceApi for Exchange {
                     get_current_stock_price_from_hk(self, &stock.stock_code).await
                 }
             }
-            Exchange::NASDAQ => get_current_price_from_nasdaq(stock).await,
+            Exchange::NASDAQ => get_current_price_from_nasdaq(self, stock).await,
         }
     }
 }
@@ -687,7 +688,58 @@ async fn get_current_index_price_from_hk(
     })
 }
 
+
+async fn get_open_price_from_nasdaq(
+    exchange: &Exchange,
+    stock: &stock_model::Model,
+) -> Result<String, Box<dyn Error>> {
+    let cached_open_price = CacheManager::get_from("OpenPrice", &stock.code).await;
+    if let Some(open_price) = cached_open_price {
+        return Ok(open_price);
+    }
+
+    let application_context = APPLICATION_CONTEXT.read().await;
+    let environment = application_context.get_environment().await;
+
+    let url = environment
+        .get_property::<String>("stock.api.nasdaq.charting")
+        .unwrap();
+    let now = Utc::now().with_timezone(&exchange.time_zone());
+    let today = now.format("%Y-%m-%d").to_string();
+    let day_before_now = now
+        .checked_sub_signed(Duration::days(100))
+        .unwrap()
+        .format("%Y-%m-%d")
+        .to_string();
+    let url = format!(
+        "{}/data/charting/historical?symbol={}&date={}~{}&includeLatestIntradayData=1&",
+        url, &stock.stock_code, day_before_now, today,
+    );
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36".parse()?);
+    headers.insert("Accept", "*/*".parse()?);
+    headers.insert("Connection", "keep-alive".parse()?);
+    headers.insert("Accept-Encoding", "gzip, deflate, br".parse()?);
+    headers.insert("Accept-Language", "en-US,en;q=0.9".parse()?);
+    headers.insert("X-KL-Ajax-Request", "Ajax_Request".parse()?);
+    headers.insert(
+        "Referer",
+        "https://charting.nasdaq.com/dynamic/chart.html".parse()?,
+    );
+    let client = reqwest::Client::builder().cookie_store(true).build()?;
+    let response = client.get(&url).headers(headers).send().await?;
+    let data: Value = response.json().await?;
+    let latest_intraday_data = data.get("latestIntradayData").unwrap();
+    let open = latest_intraday_data.get("Open").unwrap().as_str().unwrap().to_string();
+
+    CacheManager::set_to("OpenPrice", &stock.code, &open, core::time::Duration::from_hours(6)).await;
+
+    Ok(open)
+}
+
+
 async fn get_current_price_from_nasdaq(
+    exchange: &Exchange,
     stock: &stock_model::Model,
 ) -> Result<StockPriceDTO, Box<dyn Error>> {
     let application_context = APPLICATION_CONTEXT.read().await;
@@ -770,12 +822,14 @@ async fn get_current_price_from_nasdaq(
 
     // Parse high and low from keyStats.dayrange.value (format: "470.00 - 476.75")
     let (high, low) = parse_dayrange(key_stats);
+    // 单独请求历史接口获取开盘价
+    let open = get_open_price_from_nasdaq(exchange, &stock).await.unwrap_or_default();
 
     let t = update_time;
     Ok(StockPriceDTO {
         h: high,
         l: low,
-        o: "".to_string(),
+        o: open,
         pc,
         p: price,
         cje: "".to_string(),
