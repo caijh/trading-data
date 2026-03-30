@@ -11,6 +11,7 @@ use application_beans::factory::bean_factory::BeanFactory;
 use application_context::context::application_context::APPLICATION_CONTEXT;
 use application_core::lang::runnable::Runnable;
 use bigdecimal::BigDecimal;
+use chrono::Local;
 use database_mysql_seaorm::Dao;
 use sea_orm::ActiveValue::Set;
 use sea_orm::EntityTrait;
@@ -18,6 +19,7 @@ use sea_orm::IntoActiveModel;
 use std::error::Error;
 use std::ops::Not;
 use std::str::FromStr;
+use std::u64;
 use tokio::spawn;
 use tracing::info;
 
@@ -166,6 +168,27 @@ pub async fn get_stock_daily_price(code: &str) -> Result<Vec<StockDailyPrice>, B
         let exchange = Exchange::from_str(stock.exchange.as_str())?;
         let market_closed = exchange_svc::is_market_closed(&exchange).await?;
         if market_closed {
+            // Fix akshare's daily price data, which missing the latest day
+            // (exchange == SSE or exchange == SZSE) and stock_type == StockKind::Stock的情况下，判断daily_prices中是否包含最新的交易日，如果不包含，则从股票价格接口获取最新的价格，并添加到daily_prices中
+            if (exchange.as_ref() == Exchange::SSE.as_ref() || exchange.as_ref() == Exchange::SZSE.as_ref()) && stock.stock_type == StockKind::Stock.to_string() {
+                if let Some(last_price) = daily_prices.last() {
+                    let last_price_date = &last_price.date;
+                    let date = Local::now().with_timezone(&exchange.time_zone());
+                    let date = date.format("%Y%m%d").to_string().parse::<u64>()?;
+                    if date > *last_price_date {
+                        let latest_price = get_latest_price(&stock).await?;
+                        daily_prices.push(StockDailyPrice {
+                            code: stock.code.clone(),
+                            open: latest_price.open.unwrap(),
+                            close: latest_price.close,
+                            low: latest_price.low.unwrap(),
+                            high: latest_price.high.unwrap(),
+                            volume: latest_price.volume,
+                            date: date,
+                        });
+                    }
+                }
+            }
             stock_cache::set_stock_daily_prices(&stock, &daily_prices).await?;
         }
     }
@@ -180,11 +203,16 @@ pub async fn get_stock_prices(code: &str) -> Result<Vec<StockDailyPrice>, Box<dy
 
 pub async fn get_stock_price(code: &str) -> Result<StockPrice, Box<dyn Error>> {
     let stock = get_stock(code).await?;
+    let price = get_latest_price(&stock).await?;
+    Ok(price)
+}
+
+pub async fn get_latest_price(stock: &Stock) -> Result<StockPrice, Box<dyn Error>> {
     let exchange = Exchange::from_str(&stock.exchange)?;
     let price_dto = exchange.get_stock_price(&stock).await?;
 
     let price = StockPrice {
-        code: code.to_string(),
+        code: stock.code.to_string(),
         high: if price_dto.h.is_empty() {
             None
         } else {
