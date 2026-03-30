@@ -725,6 +725,7 @@ async fn get_current_price_from_nasdaq(
     let market_status = data.get("marketStatus").unwrap().as_str().unwrap();
     let primary_data = data.get("primaryData").unwrap();
     let secondary_data = data.get("secondaryData").unwrap();
+    let key_stats = data.get("keyStats").unwrap();
     let mut price: String;
     let mut v: String;
     let mut pc: String;
@@ -766,10 +767,14 @@ async fn get_current_price_from_nasdaq(
     pc = pc.replace("%", "");
     v = v.replace(",", "");
     ud = ud.replace("$", "").replace(",", "");
+
+    // Parse high and low from keyStats.dayrange.value (format: "470.00 - 476.75")
+    let (high, low) = parse_dayrange(key_stats);
+
     let t = update_time;
     Ok(StockPriceDTO {
-        h: "".to_string(),
-        l: "".to_string(),
+        h: high,
+        l: low,
         o: "".to_string(),
         pc,
         p: price,
@@ -779,6 +784,25 @@ async fn get_current_price_from_nasdaq(
         yc: "".to_string(),
         t,
     })
+}
+
+/// Parse dayrange value from keyStats to extract high and low prices
+/// Format: "470.00 - 476.75" -> (high: "476.75", low: "470.00")
+fn parse_dayrange(key_stats: &Value) -> (String, String) {
+    let dayrange = key_stats
+        .get("dayrange")
+        .and_then(|d| d.get("value"))
+        .and_then(|v| v.as_str());
+
+    if let Some(dayrange_str) = dayrange {
+        let parts: Vec<&str> = dayrange_str.splitn(2, " - ").collect();
+        if parts.len() == 2 {
+            let low = parts[0].trim().to_string();
+            let high = parts[1].trim().to_string();
+            return (high, low);
+        }
+    }
+    (String::new(), String::new())
 }
 
 fn cal_value(val: &str, unit: &str) -> BigDecimal {
