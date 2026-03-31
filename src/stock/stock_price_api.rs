@@ -12,7 +12,6 @@ use std::error::Error;
 use std::str::FromStr;
 use tracing::info;
 use util::request::Request;
-
 use crate::exchange::exchange_model::Exchange;
 use crate::holiday::holiday_svc::is_holiday;
 use crate::stock::stock_model;
@@ -92,11 +91,9 @@ async fn parse_akshare_kline(
     stock_code: &str,
 ) -> Result<Vec<StockDailyPrice>, Box<dyn Error>> {
     info!("Get stock daily price from akshare: {}", url);
-
     let response = Request::get_response(url).await?;
     let data: Value = response.json().await?;
     let kline = data.as_array();
-
     let mut stock_prices = Vec::new();
     if let Some(kline) = kline {
         stock_prices.reserve(kline.len());
@@ -119,7 +116,6 @@ async fn parse_akshare_kline(
             stock_prices.push(price);
         }
     }
-
     Ok(stock_prices)
 }
 
@@ -286,7 +282,6 @@ async fn get_stock_daily_price_from_szse(
         .get("picupdata")
         .unwrap()
         .as_array();
-
     if let Some(kline) = kline {
         for k in kline {
             let k = k.as_array().unwrap();
@@ -482,7 +477,6 @@ async fn get_stock_daily_price_from_nasdaq(
 ) -> Result<Vec<StockDailyPrice>, Box<dyn Error>> {
     let application_context = APPLICATION_CONTEXT.read().await;
     let environment = application_context.get_environment().await;
-
     let url = environment
         .get_property::<String>("stock.api.nasdaq.charting")
         .unwrap();
@@ -499,7 +493,11 @@ async fn get_stock_daily_price_from_nasdaq(
     );
     info!("{:?}", url);
     let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36".parse()?);
+    headers.insert(
+        "User-Agent",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            .parse()?,
+    );
     headers.insert("Accept", "*/*".parse()?);
     headers.insert("Connection", "keep-alive".parse()?);
     headers.insert("Accept-Encoding", "gzip, deflate, br".parse()?);
@@ -688,35 +686,27 @@ async fn get_current_index_price_from_hk(
     })
 }
 
-
-async fn get_open_price_from_nasdaq(
+async fn get_latest_intraday_data_from_nasdaq(
     exchange: &Exchange,
     stock: &stock_model::Model,
-) -> Result<String, Box<dyn Error>> {
-    let cached_open_price = CacheManager::get_from("OpenPrice", &stock.code).await;
-    if let Some(open_price) = cached_open_price {
-        return Ok(open_price);
-    }
-
+) -> Result<StockPriceDTO, Box<dyn Error>> {
     let application_context = APPLICATION_CONTEXT.read().await;
     let environment = application_context.get_environment().await;
-
     let url = environment
         .get_property::<String>("stock.api.nasdaq.charting")
         .unwrap();
     let now = Utc::now().with_timezone(&exchange.time_zone());
     let today = now.format("%Y-%m-%d").to_string();
-    let day_before_now = now
-        .checked_sub_signed(Duration::days(100))
-        .unwrap()
-        .format("%Y-%m-%d")
-        .to_string();
     let url = format!(
-        "{}/data/charting/historical?symbol={}&date={}~{}&includeLatestIntradayData=1&",
-        url, &stock.stock_code, day_before_now, today,
+        "{}/data/charting/historical?symbol={}&date={}~&includeLatestIntradayData=1&",
+        url, &stock.stock_code, today,
     );
     let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36".parse()?);
+    headers.insert(
+        "User-Agent",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            .parse()?,
+    );
     headers.insert("Accept", "*/*".parse()?);
     headers.insert("Connection", "keep-alive".parse()?);
     headers.insert("Accept-Encoding", "gzip, deflate, br".parse()?);
@@ -730,13 +720,92 @@ async fn get_open_price_from_nasdaq(
     let response = client.get(&url).headers(headers).send().await?;
     let data: Value = response.json().await?;
     let latest_intraday_data = data.get("latestIntradayData").unwrap();
-    let open = latest_intraday_data.get("Open").unwrap().as_f64().unwrap().to_string();
 
-    CacheManager::set_to("OpenPrice", &stock.code, &open, core::time::Duration::from_hours(6)).await;
+    // Round to 3 decimal places before converting to string
+    let open_value = latest_intraday_data
+        .get("Open")
+        .unwrap()
+        .as_f64()
+        .unwrap();
+    let open = (open_value * 1000.0).round() / 1000.0;
+    let open = open.to_string();
 
-    Ok(open)
+    let close_value = latest_intraday_data
+        .get("Close")
+        .unwrap()
+        .as_f64()
+        .unwrap();
+    let close = (close_value * 1000.0).round() / 1000.0;
+    let close = close.to_string();
+
+    let low_value = latest_intraday_data
+        .get("Low")
+        .unwrap()
+        .as_f64()
+        .unwrap();
+    let low = (low_value * 1000.0).round() / 1000.0;
+    let low = low.to_string();
+
+    let high_value = latest_intraday_data
+        .get("High")
+        .unwrap()
+        .as_f64()
+        .unwrap();
+    let high = (high_value * 1000.0).round() / 1000.0;
+    let high = high.to_string();
+
+    let volume = latest_intraday_data
+        .get("Volume")
+        .unwrap()
+        .as_f64()
+        .unwrap()
+        .to_string();
+    let ud = latest_intraday_data
+        .get("Change")
+        .unwrap()
+        .as_f64()
+        .unwrap()
+        .to_string();
+    let date = latest_intraday_data
+        .get("Date")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    Ok(StockPriceDTO {
+        h: high,
+        l: low,
+        o: open,
+        pc: "".to_string(),
+        p: close,
+        cje: "".to_string(),
+        ud: ud,
+        v: volume,
+        yc: "".to_string(),
+        t: date,
+    })
 }
 
+async fn get_open_price_from_nasdaq(
+    exchange: &Exchange,
+    stock: &stock_model::Model,
+) -> Result<String, Box<dyn Error>> {
+    let cached_open_price = CacheManager::get_from("OpenPrice", &stock.code).await;
+    if let Some(open_price) = cached_open_price {
+        return Ok(open_price);
+    }
+    let stock_price = get_latest_intraday_data_from_nasdaq(exchange, stock).await?;
+    let open = stock_price.o;
+    CacheManager::set_to(
+        "OpenPrice",
+        &stock.code,
+        &open,
+        core::time::Duration::from_hours(6),
+    )
+    .await;
+    Ok(open)
+}
 
 async fn get_current_price_from_nasdaq(
     exchange: &Exchange,
@@ -763,9 +832,13 @@ async fn get_current_price_from_nasdaq(
             base_url, &stock.stock_code
         )
     };
-    info!("Get stock {} daily price from url = {}", &stock.code, url);
+    info!("Get stock {} price from url = {}", &stock.code, url);
     let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36".parse()?);
+    headers.insert(
+        "User-Agent",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            .parse()?,
+    );
     headers.insert("Accept", "*/*".parse()?);
     headers.insert("Connection", "keep-alive".parse()?);
     headers.insert("Accept-Encoding", "gzip, deflate, br".parse()?);
@@ -775,69 +848,54 @@ async fn get_current_price_from_nasdaq(
     let text: Value = response.json().await?;
     let data = text.get("data").unwrap();
     let market_status = data.get("marketStatus").unwrap().as_str().unwrap();
-    let primary_data = data.get("primaryData").unwrap();
-    let secondary_data = data.get("secondaryData").unwrap();
-    let key_stats = data.get("keyStats").unwrap();
-    let mut price: String;
-    let mut v: String;
-    let mut pc: String;
-    let mut ud: String;
-    let update_time: String;
-    if market_status == "Closed"
-        || market_status == "Open"
-        || market_status == "After-Hours"
-        || market_status == "Pre-Market"
-    {
-        price = primary_data["lastSalePrice"].as_str().unwrap().to_string();
-        v = primary_data["volume"].as_str().unwrap().to_string();
-        pc = primary_data["percentageChange"]
-            .as_str()
-            .unwrap()
-            .to_string();
-        ud = primary_data["netChange"].as_str().unwrap().to_string();
-        update_time = primary_data["lastTradeTimestamp"]
-            .as_str()
-            .unwrap()
-            .to_string();
-    } else {
-        price = secondary_data["lastSalePrice"]
-            .as_str()
-            .unwrap()
-            .to_string();
-        v = secondary_data["volume"].as_str().unwrap().to_string();
-        pc = secondary_data["percentageChange"]
-            .as_str()
-            .unwrap()
-            .to_string();
-        ud = primary_data["netChange"].as_str().unwrap().to_string();
-        update_time = secondary_data["lastTradeTimestamp"]
-            .as_str()
-            .unwrap()
-            .to_string();
+    match market_status {
+        "Closed" | "After-Hours" | "Pre-Market" => {
+            get_latest_intraday_data_from_nasdaq(exchange, stock).await
+        }
+        _ => {
+            let primary_data = data.get("primaryData").unwrap();
+            let key_stats = data.get("keyStats").unwrap();
+            let mut price: String;
+            let mut v: String;
+            let mut pc: String;
+            let mut ud: String;
+            let update_time: String;
+            price = primary_data["lastSalePrice"].as_str().unwrap().to_string();
+            v = primary_data["volume"].as_str().unwrap().to_string();
+            pc = primary_data["percentageChange"]
+                .as_str()
+                .unwrap()
+                .to_string();
+            ud = primary_data["netChange"].as_str().unwrap().to_string();
+            update_time = primary_data["lastTradeTimestamp"]
+                .as_str()
+                .unwrap()
+                .to_string();
+            price = price.replace("$", "").replace(",", "");
+            pc = pc.replace("%", "");
+            v = v.replace(",", "");
+            ud = ud.replace("$", "").replace(",", "");
+            // Parse high and low from keyStats.dayrange.value (format: "470.00 - 476.75")
+            let (high, low) = parse_dayrange(key_stats);
+            // 单独请求历史接口获取开盘价
+            let open = get_open_price_from_nasdaq(exchange, &stock)
+                .await
+                .unwrap_or_default();
+            let t = update_time;
+            Ok(StockPriceDTO {
+                h: high,
+                l: low,
+                o: open,
+                pc,
+                p: price,
+                cje: "".to_string(),
+                ud,
+                v,
+                yc: "".to_string(),
+                t,
+            })
+        }
     }
-    price = price.replace("$", "").replace(",", "");
-    pc = pc.replace("%", "");
-    v = v.replace(",", "");
-    ud = ud.replace("$", "").replace(",", "");
-
-    // Parse high and low from keyStats.dayrange.value (format: "470.00 - 476.75")
-    let (high, low) = parse_dayrange(key_stats);
-    // 单独请求历史接口获取开盘价
-    let open = get_open_price_from_nasdaq(exchange, &stock).await.unwrap_or_default();
-
-    let t = update_time;
-    Ok(StockPriceDTO {
-        h: high,
-        l: low,
-        o: open,
-        pc,
-        p: price,
-        cje: "".to_string(),
-        ud,
-        v,
-        yc: "".to_string(),
-        t,
-    })
 }
 
 /// Parse dayrange value from keyStats to extract high and low prices
@@ -847,7 +905,6 @@ fn parse_dayrange(key_stats: &Value) -> (String, String) {
         .get("dayrange")
         .and_then(|d| d.get("value"))
         .and_then(|v| v.as_str());
-
     if let Some(dayrange_str) = dayrange {
         let parts: Vec<&str> = dayrange_str.splitn(2, " - ").collect();
         if parts.len() == 2 {
