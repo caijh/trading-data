@@ -446,8 +446,14 @@ pub async fn get_stock_daily_price(
         Exchange::HKEX => get_stock_daily_price_from_hkex(stock).await,
         Exchange::NASDAQ => {
             let code = &stock.code;
-            if code == "NDX.NS" || code == "SPX.NS" {
-                let symbol = if code == "NDX.NS" { ".NDX" } else { ".INX" };
+            if code == "NDX.NS" || code == "SPX.NS" || code == "IXIC.NS" {
+                let symbol = if code == "SPX.NS" {
+                    ".INX"
+                } else if code == "NDX.NS" {
+                    ".NDX"
+                } else {
+                    ".IXIC"
+                };
                 get_index_stock_daily_price_from_akshare(&exchange, stock, symbol).await
             } else if regex::Regex::new(r"^[A-Z]+\.[A-Z]+\.NS$")?.is_match(code) {
                 get_stock_daily_price_from_akshare(&exchange, stock).await

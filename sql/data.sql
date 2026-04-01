@@ -14,7 +14,10 @@ values ('000300.SH', '沪深300', 'SSE', 'Index', '000300');
 insert into stock(code, name, exchange, stock_type, stock_code)
 values ('HSI.HK', '恒生指数', 'HKEX', 'Index', 'HSI');
 insert into stock(code, name, exchange, stock_type, stock_code)
-values ('NDX.NS', '纳斯达克指数', 'NASDAQ', 'Index', 'NDX');
+values ('NDX.NS', '纳斯达克100指数', 'NASDAQ', 'Index', 'NDX');
+
+insert into stock(code, name, exchange, stock_type, stock_code)
+values ('IXIC.NS', '纳斯达克综合指数', 'NASDAQ', 'Index', 'COMP');
 
 insert into stock_index(code, name, exchange, index_code)
 values ('SPX.NS', 'S&P 500', 'NASDAQ', 'SPX');
