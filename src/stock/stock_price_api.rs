@@ -489,7 +489,7 @@ async fn get_stock_daily_price_from_nasdaq(
     let now = Utc::now().with_timezone(&exchange.time_zone());
     let today = now.format("%Y-%m-%d").to_string();
     let year_day_before_now = now
-        .checked_sub_signed(Duration::days(1080))
+        .checked_sub_signed(Duration::days(2000))
         .unwrap()
         .format("%Y-%m-%d")
         .to_string();
