@@ -803,13 +803,15 @@ async fn get_open_price_from_nasdaq(
     }
     let stock_price = get_latest_intraday_data_from_nasdaq(exchange, stock).await?;
     let open = stock_price.o;
-    CacheManager::set_to(
+    if open != "0" && !open.is_empty() {
+        CacheManager::set_to(
         "OpenPrice",
         &stock.code,
         &open,
         core::time::Duration::from_hours(6),
-    )
-    .await;
+        )
+        .await;
+    }
     Ok(open)
 }
 
@@ -887,7 +889,9 @@ async fn get_current_price_from_nasdaq(
             let open = get_open_price_from_nasdaq(exchange, &stock)
                 .await
                 .unwrap_or_default();
-            let t = update_time;
+            let t = NaiveDateTime::parse_from_str(&update_time[..update_time.len()-3], "%b %d, %Y %I:%M %p")?
+                .format("%Y-%m-%d %H:%M:%S")
+                .to_string();
             Ok(StockPriceDTO {
                 h: high,
                 l: low,
