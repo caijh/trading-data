@@ -4,7 +4,7 @@ use application_core::env::property_resolver::PropertyResolver;
 use async_trait::async_trait;
 use bigdecimal::BigDecimal;
 use bigdecimal::num_traits::Bounded;
-use chrono::{DateTime, Duration, Local, NaiveDateTime, NaiveTime, Utc};
+use chrono::{DateTime, Datelike, Local, NaiveDateTime, NaiveTime, Utc};
 use rand::{RngExt, rng};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -488,11 +488,8 @@ async fn get_stock_daily_price_from_nasdaq(
         .unwrap();
     let now = Utc::now().with_timezone(&exchange.time_zone());
     let today = now.format("%Y-%m-%d").to_string();
-    let year_day_before_now = now
-        .checked_sub_signed(Duration::days(2000))
-        .unwrap()
-        .format("%Y-%m-%d")
-        .to_string();
+    let five_years_ago_year = now.year() - 5;
+    let year_day_before_now = format!("{}-01-01", five_years_ago_year);
     let url = format!(
         "{}/data/charting/historical?symbol={}&date={}~{}&includeLatestIntradayData=1&",
         url, &stock.stock_code, year_day_before_now, today,
