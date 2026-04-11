@@ -13,9 +13,11 @@ use std::str::FromStr;
 use tracing::info;
 use util::request::Request;
 use crate::exchange::exchange_model::Exchange;
+use crate::exchange::exchange_svc;
 use crate::holiday::holiday_svc::is_holiday;
 use crate::stock::stock_model;
 use crate::token::token_svc;
+use yahoo_finance_api as yahoo;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct StockDailyPriceDTO {
@@ -143,7 +145,18 @@ impl StockPriceApi for Exchange {
                     get_current_stock_price_from_hk(self, &stock.stock_code).await
                 }
             }
-            Exchange::NASDAQ => get_current_price_from_nasdaq(self, stock).await,
+            Exchange::NASDAQ => {
+                // SPX 指数走 Yahoo Finance，nasdaq.com 接口对这类代码无数据
+                let yahoo_symbol = match stock.code.as_str() {
+                    "SPX.NS"  => Some("^GSPC"),
+                    _         => None,
+                };
+                if let Some(sym) = yahoo_symbol {
+                    get_current_index_price_from_yahoo(sym, &self).await
+                } else {
+                    get_current_price_from_nasdaq(self, stock).await
+                }
+            }
         }
     }
 }
@@ -723,7 +736,6 @@ async fn get_latest_intraday_data_from_nasdaq(
     let response = client.get(&url).headers(headers).send().await?;
     let data: Value = response.json().await?;
     let latest_intraday_data = data.get("latestIntradayData").unwrap();
-
     // Round to 3 decimal places before converting to string
     let open_value = latest_intraday_data
         .get("Open")
@@ -759,11 +771,10 @@ async fn get_latest_intraday_data_from_nasdaq(
 
     let volume = latest_intraday_data
         .get("Volume")
-        .unwrap()
-        .as_f64()
-        .unwrap()
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0)
         .to_string();
-    let ud = latest_intraday_data
+    let ud: String = latest_intraday_data
         .get("Change")
         .unwrap()
         .as_f64()
@@ -962,4 +973,60 @@ async fn get_stock_daily_price_from_akshare(
         base_url, stock.stock_code
     );
     parse_akshare_kline(&url, &stock.code).await
+}
+
+
+
+async fn get_current_index_price_from_yahoo(
+    yahoo_symbol: &str,
+    exchange: &Exchange,
+) -> Result<StockPriceDTO, Box<dyn Error>> {
+    info!("Get index price from Yahoo Finance, symbol: {}", yahoo_symbol);
+
+    let provider = yahoo::YahooConnector::new()?;
+
+    let market_status = exchange_svc::get_exchange_market_status(exchange.as_ref()).await?;
+
+    let (open, high, low, price, volume, t) = if market_status == "MarketClosed" {
+        info!("Market is closed, fetching last available daily quote for {}", yahoo_symbol);
+        let daily_resp = provider.get_quote_range(yahoo_symbol, "1d", "1mo").await?;
+        info!("Received daily quote response for {}: {:?}", yahoo_symbol, daily_resp);
+        let daily_quotes: Vec<yahoo_finance_api::Quote> = daily_resp.quotes()?;
+        let last = daily_quotes.last()
+            .ok_or("No daily quotes available")?;
+        let t = DateTime::from_timestamp(last.timestamp as i64, 0)
+            .unwrap_or_default()
+            .with_timezone(&exchange.time_zone())
+            .format("%Y-%m-%d %H:%M:%S")
+            .to_string();
+        (last.open, last.high, last.low, last.close, last.volume, t)
+    } else {
+        let intraday = provider.get_quote_range(yahoo_symbol, "1m", "1d").await?;
+        let quotes = intraday.quotes()?;
+        let open   = quotes.first().map(|q| q.open).unwrap_or(0.0);
+        let high   = quotes.iter().map(|q| q.high).fold(f64::MIN, f64::max);
+        let low    = quotes.iter().map(|q| q.low).fold(f64::MAX, f64::min);
+        let last= quotes.last().unwrap();
+        let price  = last.close;
+        let volume: u64 = quotes.iter().map(|q| q.volume).sum();
+        let t = DateTime::from_timestamp(last.timestamp as i64, 0)
+            .unwrap_or_default()
+            .with_timezone(&exchange.time_zone())
+            .format("%Y-%m-%d %H:%M:%S")
+            .to_string();
+        (open, high, low, price, volume, t)
+    };
+
+    Ok(StockPriceDTO {
+        h:   format!("{:.3}", high),
+        l:   format!("{:.3}", low),
+        o:   format!("{:.3}", open),
+        pc:  "".to_string(),
+        p:   format!("{:.3}", price),
+        cje: "".to_string(),
+        ud:  "".to_string(),
+        v:   volume.to_string(),
+        yc:  "".to_string(),
+        t,
+    })
 }

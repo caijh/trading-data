@@ -45,11 +45,6 @@ async fn get_market_status(exchange: &str) -> Result<String, Box<dyn Error>> {
     Ok("MarketClosed".to_string())
 }
 
-async fn get_stock_market_status(code: &str) -> Result<String, Box<dyn Error>> {
-    let stock = stock_svc::get_stock(code).await?;
-    get_market_status(&stock.exchange).await
-}
-
 async fn get_market_status_cache(key: &str) -> Option<Result<String, Box<dyn Error>>> {
     let market_status = CacheManager::get_from("MarketStatus", key).await;
     if market_status.is_some() {
@@ -58,13 +53,13 @@ async fn get_market_status_cache(key: &str) -> Option<Result<String, Box<dyn Err
     }
     None
 }
-pub async fn get_stock_market_status_cache(code: &str) -> Result<String, Box<dyn Error>> {
+pub async fn get_stock_market_status(code: &str) -> Result<String, Box<dyn Error>> {
     let key = format!("MarketStatus:{}", code);
     if let Some(value) = get_market_status_cache(&key).await {
         return value;
     }
-
-    let market_status = get_stock_market_status(code).await?;
+    let stock = stock_svc::get_stock(code).await?;
+    let market_status = get_market_status(&stock.exchange).await?;
     CacheManager::set_to(
         "MarketStatus",
         &key,
@@ -75,7 +70,7 @@ pub async fn get_stock_market_status_cache(code: &str) -> Result<String, Box<dyn
     Ok(market_status)
 }
 
-pub async fn get_exchange_market_status_cache(exchange: &str) -> Result<String, Box<dyn Error>> {
+pub async fn get_exchange_market_status(exchange: &str) -> Result<String, Box<dyn Error>> {
     let key = format!("MarketStatus:{}", exchange);
     if let Some(value) = get_market_status_cache(&key).await {
         return value;
@@ -140,7 +135,7 @@ pub async fn get_market_times(exchange: &Exchange) -> Result<Vec<Model>, DbErr> 
 }
 
 pub async fn get_market_end_time(exchange: &Exchange) -> Result<NaiveTime, Box<dyn Error>> {
-    let market_times = get_market_times(&exchange).await?;
+    let market_times: Vec<Model> = get_market_times(&exchange).await?;
     let last = market_times.last().unwrap();
     Ok(last.end_time)
 }
