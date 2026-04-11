@@ -152,7 +152,7 @@ impl StockPriceApi for Exchange {
                     _         => None,
                 };
                 if let Some(sym) = yahoo_symbol {
-                    get_current_index_price_from_yahoo(sym, &self).await
+                    get_current_price_from_yahoo(sym, &self).await
                 } else {
                     get_current_price_from_nasdaq(self, stock).await
                 }
@@ -977,7 +977,7 @@ async fn get_stock_daily_price_from_akshare(
 
 
 
-async fn get_current_index_price_from_yahoo(
+async fn get_current_price_from_yahoo(
     yahoo_symbol: &str,
     exchange: &Exchange,
 ) -> Result<StockPriceDTO, Box<dyn Error>> {
@@ -988,9 +988,7 @@ async fn get_current_index_price_from_yahoo(
     let market_status = exchange_svc::get_exchange_market_status(exchange.as_ref()).await?;
 
     let (open, high, low, price, volume, t) = if market_status == "MarketClosed" {
-        info!("Market is closed, fetching last available daily quote for {}", yahoo_symbol);
         let daily_resp = provider.get_quote_range(yahoo_symbol, "1d", "1mo").await?;
-        info!("Received daily quote response for {}: {:?}", yahoo_symbol, daily_resp);
         let daily_quotes: Vec<yahoo_finance_api::Quote> = daily_resp.quotes()?;
         let last = daily_quotes.last()
             .ok_or("No daily quotes available")?;
