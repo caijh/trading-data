@@ -385,16 +385,18 @@ async fn get_stock_daily_price_from_hkex(
         }
         let date = Local::now()
             .with_timezone(&exchange.time_zone())
-            .format("%Y%m%d%H%M%S")
-            .to_string();
+            .format("%Y%m%d")
+            .to_string()
+            + "093000";
         let holiday_result = is_holiday(exchange.as_ref()).await?;
         let market_closed = is_market_closed(&exchange).await?;
         if !holiday_result && market_closed && !dates.contains(&date) {
             // append today price
             let stock_price = exchange.get_stock_price(&stock).await?;
             let date = NaiveDateTime::parse_from_str(&stock_price.t, "%Y-%m-%d %H:%M:%S")?
-                .format("%Y%m%d%H%M%S")
-                .to_string();
+                .format("%Y%m%d")
+                .to_string()
+                + "093000";
             let dto = StockDailyPriceDTO {
                 t: date,
                 o: stock_price.o,
