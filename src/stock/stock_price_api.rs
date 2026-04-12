@@ -1,3 +1,8 @@
+use crate::exchange::exchange_model::Exchange;
+use crate::exchange::exchange_svc;
+use crate::holiday::holiday_svc::is_holiday;
+use crate::stock::stock_model;
+use crate::token::token_svc;
 use application_cache::CacheManager;
 use application_context::context::application_context::APPLICATION_CONTEXT;
 use application_core::env::property_resolver::PropertyResolver;
@@ -12,11 +17,6 @@ use std::error::Error;
 use std::str::FromStr;
 use tracing::info;
 use util::request::Request;
-use crate::exchange::exchange_model::Exchange;
-use crate::exchange::exchange_svc;
-use crate::holiday::holiday_svc::is_holiday;
-use crate::stock::stock_model;
-use crate::token::token_svc;
 use yahoo_finance_api as yahoo;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -35,8 +35,6 @@ pub struct StockDailyPriceDTO {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct StockDailyPrice {
-    /// 股票代码
-    pub code: String,
     /// 交易日期
     pub date: u64,
     /// 当日开盘价
@@ -51,9 +49,8 @@ pub struct StockDailyPrice {
     pub volume: Option<BigDecimal>,
 }
 
-fn create_stock_daily_price(code: &str, dto: &StockDailyPriceDTO) -> StockDailyPrice {
+fn create_stock_daily_price(dto: &StockDailyPriceDTO) -> StockDailyPrice {
     StockDailyPrice {
-        code: code.to_string(),
         date: dto.d.parse::<u64>().unwrap(),
         open: BigDecimal::from_str(&dto.o).unwrap(),
         close: BigDecimal::from_str(&dto.c).unwrap(),
@@ -90,7 +87,6 @@ fn to_akshare_symbol(exchange: &Exchange, stock_code: &str) -> String {
 /// Helper function to parse akshare kline data and convert to StockDailyPrice
 async fn parse_akshare_kline(
     url: &str,
-    stock_code: &str,
 ) -> Result<Vec<StockDailyPrice>, Box<dyn Error>> {
     info!("Get stock daily price from akshare: {}", url);
     let response = Request::get_response(url).await?;
@@ -114,7 +110,7 @@ async fn parse_akshare_kline(
                 e: String::new(),
                 hs: String::new(),
             };
-            let price = create_stock_daily_price(stock_code, &price);
+            let price = create_stock_daily_price(&price);
             stock_prices.push(price);
         }
     }
@@ -148,8 +144,8 @@ impl StockPriceApi for Exchange {
             Exchange::NASDAQ => {
                 // SPX 指数走 Yahoo Finance，nasdaq.com 接口对这类代码无数据
                 let yahoo_symbol = match stock.code.as_str() {
-                    "SPX.NS"  => Some("^GSPC"),
-                    _         => None,
+                    "SPX.NS" => Some("^GSPC"),
+                    _ => None,
                 };
                 if let Some(sym) = yahoo_symbol {
                     get_current_price_from_yahoo(sym, &self).await
@@ -265,7 +261,7 @@ async fn get_stock_daily_price_from_sse(
                 zdf: "".to_string(),
                 hs: "".to_string(),
             };
-            let price = create_stock_daily_price(&stock.code, &price);
+            let price = create_stock_daily_price(&price);
             stock_prices.push(price);
         }
     }
@@ -315,7 +311,7 @@ async fn get_stock_daily_price_from_szse(
                 e: k.get(8).unwrap().to_string(),
                 hs: "".to_string(),
             };
-            let price = create_stock_daily_price(&stock.code, &price);
+            let price = create_stock_daily_price(&price);
             stock_prices.push(price);
         }
     }
@@ -380,7 +376,7 @@ async fn get_stock_daily_price_from_hkex(
                 e: k.get(6).unwrap().as_number().unwrap().to_string(),
                 hs: "".to_string(),
             };
-            let price = create_stock_daily_price(&stock.code, &price);
+            let price = create_stock_daily_price(&price);
             stock_prices.push(price);
         }
         let date = Local::now().format("%Y%m%d").to_string();
@@ -411,7 +407,7 @@ async fn get_stock_daily_price_from_hkex(
                 zdf: stock_price.pc,
                 hs: "".to_string(),
             };
-            let price = create_stock_daily_price(&stock.code, &dto);
+            let price = create_stock_daily_price(&dto);
             stock_prices.push(price);
         }
     }
@@ -428,7 +424,7 @@ async fn get_stock_daily_price_from_akshare_zh_a(
         "{}/api/public/stock_zh_a_daily?symbol={}&adjust=qfq",
         base_url, symbol
     );
-    parse_akshare_kline(&url, &stock.code).await
+    parse_akshare_kline(&url).await
 }
 
 pub async fn get_stock_daily_price(
@@ -467,7 +463,7 @@ pub async fn get_stock_daily_price(
                 } else {
                     ".IXIC"
                 };
-                get_index_stock_daily_price_from_akshare(&exchange, stock, symbol).await
+                get_index_stock_daily_price_from_akshare(&exchange, symbol).await
             } else if regex::Regex::new(r"^[A-Z]+\.[A-Z]+\.NS$")?.is_match(code) {
                 get_stock_daily_price_from_akshare(&exchange, stock).await
             } else {
@@ -479,7 +475,6 @@ pub async fn get_stock_daily_price(
 
 async fn get_index_stock_daily_price_from_akshare(
     _exchange: &Exchange,
-    stock: &stock_model::Model,
     symbol: &str,
 ) -> Result<Vec<StockDailyPrice>, Box<dyn Error>> {
     let base_url = get_akshare_base_url().await?;
@@ -487,7 +482,7 @@ async fn get_index_stock_daily_price_from_akshare(
         "{}/api/public/index_us_stock_sina?symbol={}",
         base_url, symbol
     );
-    parse_akshare_kline(&url, &stock.code).await
+    parse_akshare_kline(&url).await
 }
 
 async fn get_stock_daily_price_from_nasdaq(
@@ -545,7 +540,7 @@ async fn get_stock_daily_price_from_nasdaq(
                 e: "".to_string(),
                 hs: "".to_string(),
             };
-            let price = create_stock_daily_price(&stock.code, &price);
+            let price = create_stock_daily_price(&price);
             stock_prices.push(price);
         }
     }
@@ -737,35 +732,19 @@ async fn get_latest_intraday_data_from_nasdaq(
     let data: Value = response.json().await?;
     let latest_intraday_data = data.get("latestIntradayData").unwrap();
     // Round to 3 decimal places before converting to string
-    let open_value = latest_intraday_data
-        .get("Open")
-        .unwrap()
-        .as_f64()
-        .unwrap();
+    let open_value = latest_intraday_data.get("Open").unwrap().as_f64().unwrap();
     let open = (open_value * 1000.0).round() / 1000.0;
     let open = open.to_string();
 
-    let close_value = latest_intraday_data
-        .get("Close")
-        .unwrap()
-        .as_f64()
-        .unwrap();
+    let close_value = latest_intraday_data.get("Close").unwrap().as_f64().unwrap();
     let close = (close_value * 1000.0).round() / 1000.0;
     let close = close.to_string();
 
-    let low_value = latest_intraday_data
-        .get("Low")
-        .unwrap()
-        .as_f64()
-        .unwrap();
+    let low_value = latest_intraday_data.get("Low").unwrap().as_f64().unwrap();
     let low = (low_value * 1000.0).round() / 1000.0;
     let low = low.to_string();
 
-    let high_value = latest_intraday_data
-        .get("High")
-        .unwrap()
-        .as_f64()
-        .unwrap();
+    let high_value = latest_intraday_data.get("High").unwrap().as_f64().unwrap();
     let high = (high_value * 1000.0).round() / 1000.0;
     let high = high.to_string();
 
@@ -813,10 +792,10 @@ async fn get_open_price_from_nasdaq(
     let open = stock_price.o;
     if open != "0" && !open.is_empty() {
         CacheManager::set_to(
-        "OpenPrice",
-        &stock.code,
-        &open,
-        core::time::Duration::from_hours(6),
+            "OpenPrice",
+            &stock.code,
+            &open,
+            core::time::Duration::from_hours(6),
         )
         .await;
     }
@@ -897,9 +876,12 @@ async fn get_current_price_from_nasdaq(
             let open = get_open_price_from_nasdaq(exchange, &stock)
                 .await
                 .unwrap_or_default();
-            let t = NaiveDateTime::parse_from_str(&update_time[..update_time.len()-3], "%b %d, %Y %I:%M %p")?
-                .format("%Y-%m-%d %H:%M:%S")
-                .to_string();
+            let t = NaiveDateTime::parse_from_str(
+                &update_time[..update_time.len() - 3],
+                "%b %d, %Y %I:%M %p",
+            )?
+            .format("%Y-%m-%d %H:%M:%S")
+            .to_string();
             Ok(StockPriceDTO {
                 h: high,
                 l: low,
@@ -972,16 +954,17 @@ async fn get_stock_daily_price_from_akshare(
         "{}/api/public/stock_us_daily?symbol={}&adjust=qfq",
         base_url, stock.stock_code
     );
-    parse_akshare_kline(&url, &stock.code).await
+    parse_akshare_kline(&url).await
 }
-
-
 
 async fn get_current_price_from_yahoo(
     yahoo_symbol: &str,
     exchange: &Exchange,
 ) -> Result<StockPriceDTO, Box<dyn Error>> {
-    info!("Get index price from Yahoo Finance, symbol: {}", yahoo_symbol);
+    info!(
+        "Get index price from Yahoo Finance, symbol: {}",
+        yahoo_symbol
+    );
 
     let provider = yahoo::YahooConnector::new()?;
 
@@ -990,8 +973,7 @@ async fn get_current_price_from_yahoo(
     let (open, high, low, price, volume, t) = if market_status == "MarketClosed" {
         let daily_resp = provider.get_quote_range(yahoo_symbol, "1d", "1mo").await?;
         let daily_quotes: Vec<yahoo_finance_api::Quote> = daily_resp.quotes()?;
-        let last = daily_quotes.last()
-            .ok_or("No daily quotes available")?;
+        let last = daily_quotes.last().ok_or("No daily quotes available")?;
         let t = DateTime::from_timestamp(last.timestamp as i64, 0)
             .unwrap_or_default()
             .with_timezone(&exchange.time_zone())
@@ -1001,11 +983,11 @@ async fn get_current_price_from_yahoo(
     } else {
         let intraday = provider.get_quote_range(yahoo_symbol, "1m", "1d").await?;
         let quotes = intraday.quotes()?;
-        let open   = quotes.first().map(|q| q.open).unwrap_or(0.0);
-        let high   = quotes.iter().map(|q| q.high).fold(f64::MIN, f64::max);
-        let low    = quotes.iter().map(|q| q.low).fold(f64::MAX, f64::min);
-        let last= quotes.last().unwrap();
-        let price  = last.close;
+        let open = quotes.first().map(|q| q.open).unwrap_or(0.0);
+        let high = quotes.iter().map(|q| q.high).fold(f64::MIN, f64::max);
+        let low = quotes.iter().map(|q| q.low).fold(f64::MAX, f64::min);
+        let last = quotes.last().unwrap();
+        let price = last.close;
         let volume: u64 = quotes.iter().map(|q| q.volume).sum();
         let t = DateTime::from_timestamp(last.timestamp as i64, 0)
             .unwrap_or_default()
@@ -1016,15 +998,15 @@ async fn get_current_price_from_yahoo(
     };
 
     Ok(StockPriceDTO {
-        h:   format!("{:.3}", high),
-        l:   format!("{:.3}", low),
-        o:   format!("{:.3}", open),
-        pc:  "".to_string(),
-        p:   format!("{:.3}", price),
+        h: format!("{:.3}", high),
+        l: format!("{:.3}", low),
+        o: format!("{:.3}", open),
+        pc: "".to_string(),
+        p: format!("{:.3}", price),
         cje: "".to_string(),
-        ud:  "".to_string(),
-        v:   volume.to_string(),
-        yc:  "".to_string(),
+        ud: "".to_string(),
+        v: volume.to_string(),
+        yc: "".to_string(),
         t,
     })
 }

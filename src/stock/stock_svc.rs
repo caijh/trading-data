@@ -178,7 +178,6 @@ pub async fn get_stock_daily_price(code: &str) -> Result<Vec<StockDailyPrice>, B
                     if date > *last_price_date {
                         let latest_price = get_latest_price(&stock).await?;
                         daily_prices.push(StockDailyPrice {
-                            code: stock.code.clone(),
                             open: latest_price.open.unwrap(),
                             close: latest_price.close,
                             low: latest_price.low.unwrap(),
