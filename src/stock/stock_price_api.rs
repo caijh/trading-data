@@ -1,5 +1,6 @@
 use crate::exchange::exchange_model::Exchange;
 use crate::exchange::exchange_svc;
+use crate::exchange::exchange_svc::is_market_closed;
 use crate::holiday::holiday_svc::is_holiday;
 use crate::stock::stock_model;
 use crate::token::token_svc;
@@ -9,7 +10,7 @@ use application_core::env::property_resolver::PropertyResolver;
 use async_trait::async_trait;
 use bigdecimal::BigDecimal;
 use bigdecimal::num_traits::Bounded;
-use chrono::{DateTime, Datelike, Local, NaiveDateTime, NaiveTime, Utc};
+use chrono::{DateTime, Datelike, Local, NaiveDateTime, Utc};
 use rand::{RngExt, rng};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -21,7 +22,7 @@ use yahoo_finance_api as yahoo;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct StockDailyPriceDTO {
-    pub d: String,
+    pub t: String,
     pub o: String,
     pub h: String,
     pub l: String,
@@ -35,8 +36,8 @@ pub struct StockDailyPriceDTO {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct StockDailyPrice {
-    /// 交易日期
-    pub date: u64,
+    /// 交易日期时间
+    pub time: u64,
     /// 当日开盘价
     pub open: BigDecimal,
     /// 当日收盘价
@@ -51,7 +52,7 @@ pub struct StockDailyPrice {
 
 fn create_stock_daily_price(dto: &StockDailyPriceDTO) -> StockDailyPrice {
     StockDailyPrice {
-        date: dto.d.parse::<u64>().unwrap(),
+        time: dto.t.parse::<u64>().unwrap(),
         open: BigDecimal::from_str(&dto.o).unwrap(),
         close: BigDecimal::from_str(&dto.c).unwrap(),
         high: BigDecimal::from_str(&dto.h).unwrap(),
@@ -85,9 +86,7 @@ fn to_akshare_symbol(exchange: &Exchange, stock_code: &str) -> String {
 }
 
 /// Helper function to parse akshare kline data and convert to StockDailyPrice
-async fn parse_akshare_kline(
-    url: &str,
-) -> Result<Vec<StockDailyPrice>, Box<dyn Error>> {
+async fn parse_akshare_kline(url: &str) -> Result<Vec<StockDailyPrice>, Box<dyn Error>> {
     info!("Get stock daily price from akshare: {}", url);
     let response = Request::get_response(url).await?;
     let data: Value = response.json().await?;
@@ -99,7 +98,7 @@ async fn parse_akshare_kline(
             let date_str = k["date"].as_str().unwrap();
             let date = iso_date_to_u64(date_str)?;
             let price = StockDailyPriceDTO {
-                d: date.to_string(),
+                t: date.to_string() + "093000",
                 o: k["open"].as_f64().unwrap().to_string(),
                 c: k["close"].as_f64().unwrap().to_string(),
                 l: k["low"].as_f64().unwrap().to_string(),
@@ -250,7 +249,7 @@ async fn get_stock_daily_price_from_sse(
         for k in kline {
             let k = k.as_array().unwrap();
             let price = StockDailyPriceDTO {
-                d: k.first().unwrap().to_string(),
+                t: k.first().unwrap().to_string() + "093000",
                 o: k.get(1).unwrap().to_string(),
                 h: k.get(2).unwrap().to_string(),
                 l: k.get(3).unwrap().to_string(),
@@ -295,12 +294,13 @@ async fn get_stock_daily_price_from_szse(
         for k in kline {
             let k = k.as_array().unwrap();
             let price = StockDailyPriceDTO {
-                d: k.first()
+                t: k.first()
                     .unwrap()
                     .as_str()
                     .unwrap()
                     .to_string()
-                    .replace('-', ""),
+                    .replace('-', "")
+                    + "093000",
                 o: k.get(1).unwrap().as_str().unwrap().to_string(),
                 c: k.get(2).unwrap().as_str().unwrap().to_string(),
                 l: k.get(3).unwrap().as_str().unwrap().to_string(),
@@ -362,10 +362,14 @@ async fn get_stock_daily_price_from_hkex(
             let o = o.as_number().unwrap().to_string();
             let dt: DateTime<Utc> =
                 DateTime::from_timestamp_millis(k.first().unwrap().as_i64().unwrap()).unwrap();
-            let date = dt.with_timezone(&Local).format("%Y%m%d").to_string();
+            let date = dt
+                .with_timezone(&exchange.time_zone())
+                .format("%Y%m%d")
+                .to_string()
+                + "093000";
             dates.push(date.clone());
             let price = StockDailyPriceDTO {
-                d: date,
+                t: date,
                 o,
                 c: k.get(4).unwrap().as_number().unwrap().to_string(),
                 l: k.get(3).unwrap().as_number().unwrap().to_string(),
@@ -379,24 +383,20 @@ async fn get_stock_daily_price_from_hkex(
             let price = create_stock_daily_price(&price);
             stock_prices.push(price);
         }
-        let date = Local::now().format("%Y%m%d").to_string();
+        let date = Local::now()
+            .with_timezone(&exchange.time_zone())
+            .format("%Y%m%d%H%M%S")
+            .to_string();
         let holiday_result = is_holiday(exchange.as_ref()).await?;
-        // new time from Local::now with 9:30
-        let open_time = Local::now()
-            .with_time(NaiveTime::from_hms_opt(9, 30, 0).unwrap())
-            .unwrap();
-        if stock.stock_type == "Stock"
-            && Local::now() > open_time
-            && !dates.contains(&date)
-            && !holiday_result
-        {
+        let market_closed = is_market_closed(&exchange).await?;
+        if !holiday_result && market_closed && !dates.contains(&date) {
             // append today price
             let stock_price = exchange.get_stock_price(&stock).await?;
             let date = NaiveDateTime::parse_from_str(&stock_price.t, "%Y-%m-%d %H:%M:%S")?
-                .format("%Y%m%d")
+                .format("%Y%m%d%H%M%S")
                 .to_string();
             let dto = StockDailyPriceDTO {
-                d: date,
+                t: date,
                 o: stock_price.o,
                 h: stock_price.h,
                 l: stock_price.l,
@@ -528,8 +528,9 @@ async fn get_stock_daily_price_from_nasdaq(
             let datetime = k["Date"].as_str().unwrap();
             let datetime = NaiveDateTime::parse_from_str(datetime, "%Y-%m-%d %H:%M:%S");
             let date = datetime?.format("%Y%m%d").to_string();
+            let date = format!("{}093000", date);
             let price = StockDailyPriceDTO {
-                d: date,
+                t: date,
                 o: k["Open"].as_number().unwrap().to_string(),
                 c: k["Close"].as_number().unwrap().to_string(),
                 l: k["Low"].as_number().unwrap().to_string(),

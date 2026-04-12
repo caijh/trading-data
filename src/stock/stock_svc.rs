@@ -170,9 +170,12 @@ pub async fn get_stock_daily_price(code: &str) -> Result<Vec<StockDailyPrice>, B
         if market_closed {
             // Fix akshare's daily price data, which missing the latest day
             // (exchange == SSE or exchange == SZSE) and stock_type == StockKind::Stock的情况下，判断daily_prices中是否包含最新的交易日，如果不包含，则从股票价格接口获取最新的价格，并添加到daily_prices中
-            if (exchange.as_ref() == Exchange::SSE.as_ref() || exchange.as_ref() == Exchange::SZSE.as_ref()) && stock.stock_type == StockKind::Stock.to_string() {
+            if (exchange.as_ref() == Exchange::SSE.as_ref()
+                || exchange.as_ref() == Exchange::SZSE.as_ref())
+                && stock.stock_type == StockKind::Stock.to_string()
+            {
                 if let Some(last_price) = daily_prices.last() {
-                    let last_price_date = &last_price.date;
+                    let last_price_date = &last_price.time;
                     let date = Local::now().with_timezone(&exchange.time_zone());
                     let date = date.format("%Y%m%d").to_string().parse::<u64>()?;
                     if date > *last_price_date {
@@ -183,7 +186,7 @@ pub async fn get_stock_daily_price(code: &str) -> Result<Vec<StockDailyPrice>, B
                             low: latest_price.low.unwrap(),
                             high: latest_price.high.unwrap(),
                             volume: latest_price.volume,
-                            date: date,
+                            time: date,
                         });
                     }
                 }
