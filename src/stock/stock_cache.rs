@@ -24,7 +24,13 @@ pub async fn get_stock(code: &str) -> Result<stock_model::Model, Box<dyn Error>>
     }
     let stock = stock.unwrap();
     // 将查询结果存入缓存
-    CacheManager::set_to("",code, &serde_json::to_string(&stock)?, Duration::from_secs(3600 * 2)).await;
+    CacheManager::set_to(
+        "",
+        code,
+        &serde_json::to_string(&stock)?,
+        Duration::from_secs(3600 * 3),
+    )
+    .await;
 
     Ok(stock)
 }
