@@ -870,9 +870,9 @@ async fn get_current_price_from_nasdaq(
                 .unwrap()
                 .to_string();
             price = price.replace("$", "").replace(",", "");
-            pc = pc.replace("%", "");
+            pc = pc.replace("%", "").replace("+", "");
             v = v.replace(",", "");
-            ud = ud.replace("$", "").replace(",", "");
+            ud = ud.replace("$", "").replace(",", "").replace("+", "");
             // Parse high and low from keyStats.dayrange.value (format: "470.00 - 476.75")
             let (high, low) = parse_dayrange(key_stats);
             // 单独请求历史接口获取开盘价
@@ -911,8 +911,8 @@ fn parse_dayrange(key_stats: &Value) -> (String, String) {
     if let Some(dayrange_str) = dayrange {
         let parts: Vec<&str> = dayrange_str.splitn(2, " - ").collect();
         if parts.len() == 2 {
-            let low = parts[0].trim().to_string();
-            let high = parts[1].trim().to_string();
+            let low = parts[0].trim().to_string().replace(",", "");
+            let high = parts[1].trim().to_string().replace(",", "");
             return (high, low);
         }
     }

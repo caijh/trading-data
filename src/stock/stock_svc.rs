@@ -212,7 +212,6 @@ pub async fn get_stock_price(code: &str) -> Result<StockPrice, Box<dyn Error>> {
 pub async fn get_latest_price(stock: &Stock) -> Result<StockPrice, Box<dyn Error>> {
     let exchange = Exchange::from_str(&stock.exchange)?;
     let price_dto = exchange.get_stock_price(&stock).await?;
-
     let price = StockPrice {
         code: stock.code.to_string(),
         high: if price_dto.h.is_empty() {
