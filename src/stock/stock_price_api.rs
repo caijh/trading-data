@@ -873,12 +873,22 @@ async fn get_current_price_from_nasdaq(
             pc = pc.replace("%", "").replace("+", "");
             v = v.replace(",", "");
             ud = ud.replace("$", "").replace(",", "").replace("+", "");
-            // Parse high and low from keyStats.dayrange.value (format: "470.00 - 476.75")
-            let (high, low) = parse_dayrange(key_stats);
-            // 单独请求历史接口获取开盘价
-            let open = get_open_price_from_nasdaq(exchange, &stock)
-                .await
-                .unwrap_or_default();
+            let high;
+            let low ;
+            let open;
+            if stock.stock_type != "Fund" {
+                // Parse high and low from keyStats.dayrange.value (format: "470.00 - 476.75")
+                (high, low) = parse_dayrange(key_stats);
+                // 单独请求历史接口获取开盘价
+                open = get_open_price_from_nasdaq(exchange, &stock).await.unwrap_or_default();
+            } else {
+                // eft nasdaq接口没有dayrange字段，直接请求历史接口获取开盘价、最高价、最低价
+                let dto = get_latest_intraday_data_from_nasdaq(exchange, stock).await?;
+                high = dto.h;
+                low = dto.l;
+                open = dto.o;
+            }
+
             let t = NaiveDateTime::parse_from_str(
                 &update_time[..update_time.len() - 3],
                 "%b %d, %Y %I:%M %p",
