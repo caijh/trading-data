@@ -177,7 +177,7 @@ pub async fn get_stock_daily_price(code: &str) -> Result<Vec<StockDailyPrice>, B
                 if let Some(last_price) = daily_prices.last() {
                     let last_price_date = &last_price.time;
                     let date = Local::now().with_timezone(&exchange.time_zone());
-                    let date = date.format("%Y%m%d").to_string().parse::<u64>()?;
+                    let date = date.format("%Y%m%d093000").to_string().parse::<u64>()?;
                     if date > *last_price_date {
                         let latest_price = get_latest_price(&stock).await?;
                         daily_prices.push(StockDailyPrice {
