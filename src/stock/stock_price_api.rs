@@ -887,6 +887,7 @@ async fn get_current_price_from_nasdaq(
                 high = dto.h;
                 low = dto.l;
                 open = dto.o;
+                v = dto.v;
             }
 
             let t = NaiveDateTime::parse_from_str(
