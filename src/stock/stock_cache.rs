@@ -54,11 +54,11 @@ pub async fn get_stock_daily_prices(stock: &Stock) -> Result<Vec<StockDailyPrice
 pub async fn set_stock_daily_prices(
     stock: &Stock,
     prices: &Vec<StockDailyPrice>,
+    seconds: usize,
 ) -> Result<(), Box<dyn Error>> {
     let client = Redis::get_client();
     let mut con = client.get_connection()?;
     let key = "Stock:Price:K:D:".to_string() + &stock.code;
-    let seconds = 60 * 5;
     con.set_ex::<&str, String, String>(
         &key,
         serde_json::to_string(&prices).unwrap(),

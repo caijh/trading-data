@@ -169,29 +169,25 @@ pub async fn get_stock_daily_price(code: &str) -> Result<Vec<StockDailyPrice>, B
         let market_closed = exchange_svc::is_market_closed(&exchange).await?;
         if market_closed {
             // Fix akshare's daily price data, which missing the latest day
-            // (exchange == SSE or exchange == SZSE) and stock_type == StockKind::Stock的情况下，判断daily_prices中是否包含最新的交易日，如果不包含，则从股票价格接口获取最新的价格，并添加到daily_prices中
-            if (exchange.as_ref() == Exchange::SSE.as_ref()
-                || exchange.as_ref() == Exchange::SZSE.as_ref())
-                && stock.stock_type == StockKind::Stock.to_string()
-            {
-                if let Some(last_price) = daily_prices.last() {
-                    let last_price_date = &last_price.time;
-                    let date = Local::now().with_timezone(&exchange.time_zone());
-                    let date = date.format("%Y%m%d093000").to_string().parse::<u64>()?;
-                    if date > *last_price_date {
-                        let latest_price = get_latest_price(&stock).await?;
-                        daily_prices.push(StockDailyPrice {
-                            open: latest_price.open.unwrap(),
-                            close: latest_price.close,
-                            low: latest_price.low.unwrap(),
-                            high: latest_price.high.unwrap(),
-                            volume: latest_price.volume,
-                            time: date,
-                        });
-                    }
+            if let Some(last_price) = daily_prices.last() {
+                let last_price_date = &last_price.time;
+                let date = Local::now().with_timezone(&exchange.time_zone());
+                let date = date.format("%Y%m%d093000").to_string().parse::<u64>()?;
+                if date > *last_price_date {
+                    let latest_price = get_latest_price(&stock).await?;
+                    daily_prices.push(StockDailyPrice {
+                        open: latest_price.open.unwrap(),
+                        close: latest_price.close,
+                        low: latest_price.low.unwrap(),
+                        high: latest_price.high.unwrap(),
+                        volume: latest_price.volume,
+                        time: date,
+                    });
                 }
             }
-            stock_cache::set_stock_daily_prices(&stock, &daily_prices).await?;
+            stock_cache::set_stock_daily_prices(&stock, &daily_prices, 60 * 30).await?;
+        } else {
+            stock_cache::set_stock_daily_prices(&stock, &daily_prices, 60 * 1).await?;
         }
     }
 
