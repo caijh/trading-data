@@ -33,7 +33,7 @@ use tracing::info;
 /// * `Result<(), Box<dyn Error>>` - 返回一个结果类型，表示操作成功或携带一个错误类型
 ///
 /// # Remarks
-/// 该函数首先会根据传入的交易所名称创建一个Exchange实例，然后同步该交易所的股票和基金信息
+/// 该函数首先会根据传入的交易所名称创建一个 Exchange 实例，然后同步该交易所的股票和基金信息
 pub async fn sync(exchange: &str) -> Result<(), Box<dyn Error>> {
     let exchange_str = exchange.to_string();
     let exchange = Exchange::from_str(exchange)?;
@@ -157,40 +157,67 @@ pub async fn delete_funds(exchange: &Exchange) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// 获取股票日线价格数据
+///
+/// 首先尝试从缓存获取，如果缓存未命中则从 API 获取。
+/// 当市场收盘且非节假日时，会尝试补充最新价格数据。
+///
+/// # Arguments
+///
+/// * `code` - 股票代码
+///
+/// # Returns
+///
+/// 返回股票日线价格数据列表
 pub async fn get_stock_daily_price(code: &str) -> Result<Vec<StockDailyPrice>, Box<dyn Error>> {
     info!("Get stock daily price, code = {}", code);
     let stock = get_stock(code).await?;
-    let mut daily_prices: Vec<StockDailyPrice> =
-        stock_cache::get_stock_daily_prices(&stock).await?;
 
-    if daily_prices.is_empty() {
-        let prices = stock_price_api::get_stock_daily_price(&stock).await?;
-        daily_prices = prices;
-        let exchange = Exchange::from_str(stock.exchange.as_str())?;
-        let is_holiday = holiday_svc::is_holiday(exchange.as_ref()).await?;
-        let market_closed = exchange_svc::is_market_closed(&exchange).await?;
-        if !is_holiday && market_closed {
-            // Fix akshare's daily price data, which missing the latest day
-            if let Some(last_price) = daily_prices.last() {
-                let last_price_date = &last_price.time;
-                let date = Local::now().with_timezone(&exchange.time_zone());
-                let date = date.format("%Y%m%d093000").to_string().parse::<u64>()?;
-                if date > *last_price_date {
-                    let latest_price = get_latest_price(&stock).await?;
+    // 尝试从缓存获取
+    let daily_prices = stock_cache::get_stock_daily_prices(&stock).await?;
+    if !daily_prices.is_empty() {
+        return Ok(daily_prices);
+    }
+
+    // 缓存未命中，从 API 获取
+    let mut daily_prices = stock_price_api::get_stock_daily_price(&stock).await?;
+
+    // 并行检查市场状态
+    let exchange = Exchange::from_str(stock.exchange.as_str())?;
+    let is_holiday = holiday_svc::is_holiday(exchange.as_ref()).await?;
+    let market_closed = exchange_svc::is_market_closed(&exchange).await?;
+
+    // 如果市场收盘且非节假日，尝试补充最新价格
+    if !is_holiday && market_closed {
+        if let Some(last_price) = daily_prices.last() {
+            let last_price_date = last_price.time;
+            let now = Local::now().with_timezone(&exchange.time_zone());
+            let current_date = now.format("%Y%m%d093000").to_string().parse::<u64>()?;
+
+            if current_date > last_price_date {
+                // 获取最新价格并补充（如果开盘价、最高价、最低价可用）
+                let latest_price = get_latest_price(&stock).await?;
+                if let (Some(open), Some(high), Some(low)) =
+                    (latest_price.open, latest_price.high, latest_price.low)
+                {
                     daily_prices.push(StockDailyPrice {
-                        open: latest_price.open.unwrap(),
+                        open,
                         close: latest_price.close,
-                        low: latest_price.low.unwrap(),
-                        high: latest_price.high.unwrap(),
+                        high,
+                        low,
                         volume: latest_price.volume,
-                        time: date,
+                        time: current_date,
                     });
                 }
             }
-            stock_cache::set_stock_daily_prices(&stock, &daily_prices, 60 * 30).await?;
-        } else {
-            stock_cache::set_stock_daily_prices(&stock, &daily_prices, 60 * 1).await?;
         }
+        // 市场收盘时缓存 30 分钟
+        stock_cache::set_stock_daily_prices(&stock, &daily_prices, 60 * 30).await?;
+    } else if is_holiday {
+        stock_cache::set_stock_daily_prices(&stock, &daily_prices, 60 * 60).await?;
+    } else {
+        // 市场开盘或节假日时缓存 2 分钟
+        stock_cache::set_stock_daily_prices(&stock, &daily_prices, 60 * 2).await?;
     }
 
     Ok(daily_prices)
