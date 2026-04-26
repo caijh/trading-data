@@ -2,6 +2,7 @@ use crate::exchange::exchange_model::Exchange;
 use crate::exchange::exchange_svc;
 use crate::fund::fund_api::FundApi;
 use crate::fund::{fund_dao, fund_model};
+use crate::holiday::holiday_svc;
 use crate::index::index_job::SyncIndexStocksJob;
 use crate::stock::stock_api::StockApi;
 use crate::stock::stock_model::{Model as Stock, StockKind, StockPrice};
@@ -166,8 +167,9 @@ pub async fn get_stock_daily_price(code: &str) -> Result<Vec<StockDailyPrice>, B
         let prices = stock_price_api::get_stock_daily_price(&stock).await?;
         daily_prices = prices;
         let exchange = Exchange::from_str(stock.exchange.as_str())?;
+        let is_holiday = holiday_svc::is_holiday(exchange.as_ref()).await?;
         let market_closed = exchange_svc::is_market_closed(&exchange).await?;
-        if market_closed {
+        if !is_holiday && market_closed {
             // Fix akshare's daily price data, which missing the latest day
             if let Some(last_price) = daily_prices.last() {
                 let last_price_date = &last_price.time;
