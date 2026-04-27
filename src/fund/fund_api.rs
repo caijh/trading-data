@@ -190,6 +190,9 @@ fn read_funds_from_sz_excel(
                 // 跳过标题行
                 continue;
             }
+            if row[2] != "ETF" {
+                continue;
+            }
             if row[3] == "货币市场基金" || row[3] == "债券基金" {
                 continue;
             }
