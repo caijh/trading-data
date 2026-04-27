@@ -13,12 +13,21 @@ use std::error::Error;
 use std::str::FromStr;
 use std::time::Duration;
 
-/// 判断交易所当前是否处于交易状态
+/// 根据交易所名称判断其当前的交易状态。
 ///
-/// 逻辑流程：
-/// 1. 检查今天是否为该交易所的节假日
-/// 2. 获取交易所的时区并计算当前当地时间
-/// 3. 检查当前时间是否落在该交易所定义的任何一个交易时间段内
+/// 逻辑步骤：
+/// 1. 检查该交易所今天是否为节假日。
+/// 2. 获取该交易所的交易时间段定义。
+/// 3. 根据该交易所的时区获取当前时间。
+/// 4. 判断当前时间是否落在任何一个交易时间段内。
+///
+/// # 参数
+/// * `exchange` - 交易所的标识符（如 "SSE", "SZSE"）。
+///
+/// # 返回值
+/// * `Ok("MarketTrading")` - 处于交易时间。
+/// * `Ok("MarketClosed")` - 非交易时间（节假日或不在交易时段内）。
+/// * `Err` - 发生错误（如解析交易所失败或数据库查询失败）。
 async fn get_market_status(exchange: &str) -> Result<String, Box<dyn Error>> {
     // 判断今天是否为节假日
     let is_holiday = holiday_svc::is_holiday(&exchange).await?;
@@ -26,15 +35,12 @@ async fn get_market_status(exchange: &str) -> Result<String, Box<dyn Error>> {
         return Ok("MarketClosed".to_string());
     }
 
-    // 根据交易所名称解析出 Exchange 模型（包含时区信息）
+    // 判断是否在交易时间
     let exchange = Exchange::from_str(exchange)?;
-    // 获取该交易所当地的当前时间
     let date = Local::now().with_timezone(&exchange.time_zone());
-
-    // 获取该交易所的所有交易时间段
     let market_times = get_market_times(&exchange).await?;
+
     if market_times.is_empty() {
-        // 如果没有定义交易时间，默认视为交易中（或根据业务需求调整）
         return Ok("MarketTrading".to_string());
     }
 
@@ -49,7 +55,6 @@ async fn get_market_status(exchange: &str) -> Result<String, Box<dyn Error>> {
         return Ok("MarketClosed".to_string());
     }
 
-    // 遍历所有交易时间段，判断当前时间是否在其中
     for market_time in market_times {
         if market_time.start_time <= time && time <= market_time.end_time {
             return Ok("MarketTrading".to_string());
@@ -59,7 +64,10 @@ async fn get_market_status(exchange: &str) -> Result<String, Box<dyn Error>> {
     Ok("MarketClosed".to_string())
 }
 
-/// 从缓存中获取市场状态
+/// 尝试从缓存中获取市场状态。
+///
+/// # 参数
+/// * `key` - 缓存键。
 async fn get_market_status_cache(key: &str) -> Option<Result<String, Box<dyn Error>>> {
     let market_status = CacheManager::get_from("MarketStatus", key).await;
     if market_status.is_some() {
@@ -69,24 +77,21 @@ async fn get_market_status_cache(key: &str) -> Option<Result<String, Box<dyn Err
     None
 }
 
-/// 获取指定股票所属市场的当前交易状态
+/// 获取指定股票所属交易所的当前交易状态。
+///
+/// 会先尝试从缓存获取，若无缓存则通过 `stock_svc` 获取交易所信息并计算状态，最后将结果缓存 300 秒。
 ///
 /// # 参数
-/// * `code` - 股票代码
-///
-/// # 返回值
-/// * `Ok(String)` - 状态字符串 ("MarketTrading" 或 "MarketClosed")
+/// * `code` - 股票代码。
 pub async fn get_stock_market_status(code: &str) -> Result<String, Box<dyn Error>> {
     let key = format!("MarketStatus:{}", code);
     if let Some(value) = get_market_status_cache(&key).await {
         return value;
     }
 
-    // 根据股票代码获取其所属的交易所
     let stock = stock_svc::get_stock(code).await?;
     let market_status = get_market_status(&stock.exchange).await?;
 
-    // 缓存结果，有效期 5 分钟
     CacheManager::set_to(
         "MarketStatus",
         &key,
@@ -94,13 +99,16 @@ pub async fn get_stock_market_status(code: &str) -> Result<String, Box<dyn Error
         Duration::from_secs(300),
     )
     .await;
+
     Ok(market_status)
 }
 
-/// 获取指定交易所的当前交易状态
+/// 获取指定交易所的当前交易状态。
+///
+/// 会先尝试从缓存获取，若无缓存则计算状态，最后将结果缓存 120 秒。
 ///
 /// # 参数
-/// * `exchange` - 交易所名称/代码
+/// * `exchange` - 交易所的标识符。
 pub async fn get_exchange_market_status(exchange: &str) -> Result<String, Box<dyn Error>> {
     let key = format!("MarketStatus:{}", exchange);
     if let Some(value) = get_market_status_cache(&key).await {
@@ -109,7 +117,6 @@ pub async fn get_exchange_market_status(exchange: &str) -> Result<String, Box<dy
 
     let market_status = get_market_status(exchange).await?;
 
-    // 缓存结果，有效期 2 分钟
     CacheManager::set_to(
         "MarketStatus",
         &key,
@@ -117,6 +124,7 @@ pub async fn get_exchange_market_status(exchange: &str) -> Result<String, Box<dy
         Duration::from_secs(120),
     )
     .await;
+
     Ok(market_status)
 }
 
@@ -136,7 +144,10 @@ pub async fn get_exchange_current_time(exchange: &str) -> Result<String, Box<dyn
     Ok(time.format("%Y-%m-%d %H:%M:%S").to_string())
 }
 
-/// 从数据库查询交易所的交易时间段（内部实现）
+/// 从数据库中查询交易所的交易时间段定义。
+///
+/// # 参数
+/// * `exchange` - 交易所枚举对象。
 async fn _get_market_times(exchange: &Exchange) -> Result<Vec<Model>, DbErr> {
     let application_context = APPLICATION_CONTEXT.read().await;
     let dao = application_context.get_bean_factory().get::<Dao>();
@@ -147,12 +158,12 @@ async fn _get_market_times(exchange: &Exchange) -> Result<Vec<Model>, DbErr> {
         .await
 }
 
-/// 获取交易所的交易时间段列表
+/// 获取交易所的交易时间段定义。
 ///
-/// 优先从缓存中读取，若缓存失效则从数据库加载并更新缓存。
+/// 优先从缓存获取（缓存时间 1 小时），若无缓存则从数据库加载并缓存。
 ///
-/// # 返回值
-/// * `Ok(Vec<Model>)` - 交易时间段列表，按开始时间升序排列
+/// # 参数
+/// * `exchange` - 交易所枚举对象。
 pub async fn get_market_times(exchange: &Exchange) -> Result<Vec<Model>, DbErr> {
     let key = exchange.as_ref();
     let market_times_json = CacheManager::get_from("MarketTimes", key).await;
@@ -165,26 +176,33 @@ pub async fn get_market_times(exchange: &Exchange) -> Result<Vec<Model>, DbErr> 
 
     let market_times = _get_market_times(exchange).await?;
     let market_times_json = serde_json::to_string(&market_times).unwrap();
-
-    // 缓存结果，有效期 1 小时
     CacheManager::set_to(
         "MarketTimes",
         &key,
         &market_times_json,
-        Duration::from_secs(10800),
+        Duration::from_secs(3600),
     )
     .await;
+
     Ok(market_times)
 }
 
-/// 获取交易所最后一个交易时段的结束时间
+/// 获取指定交易所最后一个交易时段的结束时间。
+///
+/// # 参数
+/// * `exchange` - 交易所枚举对象。
 pub async fn get_market_end_time(exchange: &Exchange) -> Result<NaiveTime, Box<dyn Error>> {
     let market_times: Vec<Model> = get_market_times(&exchange).await?;
-    let last = market_times.last().unwrap();
+    let last = market_times
+        .last()
+        .expect("Exchange should have at least one market time defined");
     Ok(last.end_time)
 }
 
-/// 判断交易所是否已经收盘
+/// 判断指定交易所是否已经收盘（当前时间已超过当日最后一个交易时段的结束时间）。
+///
+/// # 参数
+/// * `exchange` - 交易所枚举对象。
 pub async fn is_market_closed(exchange: &Exchange) -> Result<bool, Box<dyn Error>> {
     let date = Local::now().with_timezone(&exchange.time_zone());
     let time = date.time();
