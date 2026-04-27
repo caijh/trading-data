@@ -289,3 +289,21 @@ pub async fn get_earnings_surprise(
     let earnings_data = stock_api::get_earnings_surprise(&stock.stock_code).await?;
     Ok(earnings_data)
 }
+
+/// Get upper limit stocks for a given exchange
+pub async fn get_uppper_limit_stocks(
+    exchange: &str,
+) -> Result<Vec<stock_api::UpperLimitStock>, Box<dyn Error>> {
+    // 只支持 SSE 和 SZSE
+    let exchange_enum = Exchange::from_str(exchange)?;
+    match exchange_enum {
+        Exchange::SSE | Exchange::SZSE => {}
+        _ => {
+            return Err(format!("Only support SSE and SZSE, got {}", exchange).into());
+        }
+    }
+
+    // 调用 stock_api 中的实现
+    let stocks = exchange_enum.get_upper_limit_stocks(exchange).await?;
+    Ok(stocks)
+}

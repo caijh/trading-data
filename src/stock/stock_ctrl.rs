@@ -40,3 +40,15 @@ async fn earnings_surprise(Query(params): Query<StockParams>) -> impl IntoRespon
     let r = stock_svc::get_earnings_surprise(&params.code).await;
     RespBody::result(&r).response()
 }
+
+#[derive(Serialize, Deserialize)]
+struct UpperLimitStocksParams {
+    pub exchange: String,
+}
+
+
+#[get("/stock/upper-limit")]
+async fn get_uppper_limit_stocks(Query(params): Query<UpperLimitStocksParams>) -> impl IntoResponse {
+    let r = stock_svc::get_uppper_limit_stocks(&params.exchange).await;
+    RespBody::result(&r).response()
+}

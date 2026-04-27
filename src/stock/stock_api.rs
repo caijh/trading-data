@@ -1,5 +1,6 @@
 use crate::exchange::exchange_model::Exchange;
 use crate::index::index_api::IndexApi;
+use crate::stock::stock_dao;
 use crate::stock::stock_model::{Model, StockKind};
 use application_context::context::application_context::APPLICATION_CONTEXT;
 use application_core::env::property_resolver::PropertyResolver;
@@ -12,13 +13,35 @@ use std::error::Error;
 use std::fs::File;
 use std::io::copy;
 use std::path::Path;
+use std::str::FromStr;
 use tempfile::tempdir;
 use tracing::info;
 use util::request::Request;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpperLimitStock {
+    pub serial_no: u32,
+    pub stock_code: String,
+    pub stock_name: String,
+    pub change_percent: f64,
+    pub latest_price: f64,
+    pub turnover_amount: f64,
+    pub circulating_market_cap: f64,
+    pub total_market_cap: f64,
+    pub turnover_rate: f64,
+    pub limit_up_order_fund: f64,
+    pub first_limit_up_time: String,
+    pub last_limit_up_time: String,
+    pub limit_up_break_count: u32,
+    pub limit_up_stats: String,
+    pub consecutive_limit_up_days: u32,
+    pub industry: String,
+}
+
 #[async_trait]
 pub trait StockApi {
     async fn get_stocks(&self) -> Result<Vec<Model>, Box<dyn Error>>;
+    async fn get_upper_limit_stocks(&self, exchange: &str) -> Result<Vec<UpperLimitStock>, Box<dyn Error>>;
 }
 
 #[async_trait]
@@ -43,7 +66,7 @@ impl StockApi for Exchange {
                 let path = dir.path().join("sz_stocks.xlsx");
                 Request::download(&url, path.as_path()).await?;
                 let path1 = path.as_path();
-                let stocks = read_stocks_from_excel(path1, self, "A股列表", 4, 5)?;
+                let stocks = read_stocks_from_excel(path1, self, "A 股列表", 4, 5)?;
                 Ok(stocks)
             }
             Exchange::HKEX => get_stock_from_hk().await,
@@ -66,6 +89,140 @@ impl StockApi for Exchange {
                 Ok(stocks)
             }
         }
+    }
+
+    async fn get_upper_limit_stocks(
+        &self,
+        exchange: &str,
+    ) -> Result<Vec<UpperLimitStock>, Box<dyn Error>> {
+        // 只支持 SSE 和 SZSE
+        let exchange_enum = Exchange::from_str(exchange)?;
+        match exchange_enum {
+            Exchange::SSE | Exchange::SZSE => {}
+            _ => {
+                return Err(format!("Only support SSE and SZSE, got {}", exchange).into());
+            }
+        }
+        let application_context = APPLICATION_CONTEXT.read().await;
+        let environment = application_context.get_environment().await;
+        let base_url = environment
+            .get_property::<String>("stock.api.akshare.baseurl").unwrap();
+        let date = chrono::Local::now().format("%Y%m%d").to_string();
+        // 从 akshare 接口获取涨停池数据
+        let url = format!(
+            "{}/api/public/stock_zt_pool_em?date={}",
+            base_url,
+            date
+        );
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(
+            "User-Agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                .parse()?,
+        );
+        headers.insert("Referer", "https://emweb.securities.xinhua.com/".parse()?);
+        let client = reqwest::Client::builder().build()?;
+        let response = client.get(&url).headers(headers).send().await?;
+        if !response.status().is_success() {
+            return Err(format!(
+                "Failed to fetch upper limit stocks: {}",
+                response.status()
+            )
+            .into());
+        }
+        let json_data: Value = response.json().await?;
+
+        // 解析 akshare 返回的数据
+        let data_array = json_data.as_array().ok_or("Expected an array in response")?;
+
+        let mut upper_limit_stocks = Vec::new();
+        for item in data_array {
+            // 提取股票代码（不含交易所后缀）
+            let stock_code = item
+                .get("代码")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing stock code")?
+                .to_string();
+
+            // 拼接交易所代码后缀
+            let full_code = format!("{}{}", stock_code, exchange_enum.stock_code_suffix());
+
+            // 通过 stock_dao 检查股票是否存在于交易所
+            if let Ok(Some(_stock)) = stock_dao::get_stock_by_code(&full_code).await {
+                // 股票存在，添加到结果中
+                let upper_limit_stock = UpperLimitStock {
+                    serial_no: item
+                        .get("序号")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0) as u32,
+                    stock_code: full_code, // 使用拼接后的代码
+                    stock_name: item
+                        .get("名称")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    change_percent: item
+                        .get("涨跌幅")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.0),
+                    latest_price: item
+                        .get("最新价")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.0),
+                    turnover_amount: item
+                        .get("成交额")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.0),
+                    circulating_market_cap: item
+                        .get("流通市值")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.0),
+                    total_market_cap: item
+                        .get("总市值")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.0),
+                    turnover_rate: item
+                        .get("换手率")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.0),
+                    limit_up_order_fund: item
+                        .get("封板资金")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.0),
+                    first_limit_up_time: item
+                        .get("首次封板时间")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    last_limit_up_time: item
+                        .get("最后封板时间")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    limit_up_break_count: item
+                        .get("炸板次数")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0) as u32,
+                    limit_up_stats: item
+                        .get("涨停统计")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    consecutive_limit_up_days: item
+                        .get("连板数")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0) as u32,
+                    industry: item
+                        .get("所属行业")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                };
+                upper_limit_stocks.push(upper_limit_stock);
+            }
+        }
+
+        Ok(upper_limit_stocks)
     }
 }
 
