@@ -41,7 +41,10 @@ pub struct UpperLimitStock {
 #[async_trait]
 pub trait StockApi {
     async fn get_stocks(&self) -> Result<Vec<Model>, Box<dyn Error>>;
-    async fn get_upper_limit_stocks(&self, exchange: &str) -> Result<Vec<UpperLimitStock>, Box<dyn Error>>;
+    async fn get_upper_limit_stocks(
+        &self,
+        exchange: &str,
+    ) -> Result<Vec<UpperLimitStock>, Box<dyn Error>>;
 }
 
 #[async_trait]
@@ -65,8 +68,7 @@ impl StockApi for Exchange {
                 );
                 let path = dir.path().join("sz_stocks.xlsx");
                 Request::download(&url, path.as_path()).await?;
-                let path1 = path.as_path();
-                let stocks = read_stocks_from_excel(path1, self, "A 股列表", 4, 5)?;
+                let stocks = read_stocks_from_excel(path.as_path(), self, "A股列表", 4, 5)?;
                 Ok(stocks)
             }
             Exchange::HKEX => get_stock_from_hk().await,
@@ -106,14 +108,11 @@ impl StockApi for Exchange {
         let application_context = APPLICATION_CONTEXT.read().await;
         let environment = application_context.get_environment().await;
         let base_url = environment
-            .get_property::<String>("stock.api.akshare.baseurl").unwrap();
+            .get_property::<String>("stock.api.akshare.baseurl")
+            .unwrap();
         let date = chrono::Local::now().format("%Y%m%d").to_string();
         // 从 akshare 接口获取涨停池数据
-        let url = format!(
-            "{}/api/public/stock_zt_pool_em?date={}",
-            base_url,
-            date
-        );
+        let url = format!("{}/api/public/stock_zt_pool_em?date={}", base_url, date);
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert(
             "User-Agent",
@@ -124,16 +123,16 @@ impl StockApi for Exchange {
         let client = reqwest::Client::builder().build()?;
         let response = client.get(&url).headers(headers).send().await?;
         if !response.status().is_success() {
-            return Err(format!(
-                "Failed to fetch upper limit stocks: {}",
-                response.status()
-            )
-            .into());
+            return Err(
+                format!("Failed to fetch upper limit stocks: {}", response.status()).into(),
+            );
         }
         let json_data: Value = response.json().await?;
 
         // 解析 akshare 返回的数据
-        let data_array = json_data.as_array().ok_or("Expected an array in response")?;
+        let data_array = json_data
+            .as_array()
+            .ok_or("Expected an array in response")?;
 
         let mut upper_limit_stocks = Vec::new();
         for item in data_array {
@@ -151,40 +150,22 @@ impl StockApi for Exchange {
             if let Ok(Some(_stock)) = stock_dao::get_stock_by_code(&full_code).await {
                 // 股票存在，添加到结果中
                 let upper_limit_stock = UpperLimitStock {
-                    serial_no: item
-                        .get("序号")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(0) as u32,
+                    serial_no: item.get("序号").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
                     stock_code: full_code, // 使用拼接后的代码
                     stock_name: item
                         .get("名称")
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string(),
-                    change_percent: item
-                        .get("涨跌幅")
-                        .and_then(|v| v.as_f64())
-                        .unwrap_or(0.0),
-                    latest_price: item
-                        .get("最新价")
-                        .and_then(|v| v.as_f64())
-                        .unwrap_or(0.0),
-                    turnover_amount: item
-                        .get("成交额")
-                        .and_then(|v| v.as_f64())
-                        .unwrap_or(0.0),
+                    change_percent: item.get("涨跌幅").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                    latest_price: item.get("最新价").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                    turnover_amount: item.get("成交额").and_then(|v| v.as_f64()).unwrap_or(0.0),
                     circulating_market_cap: item
                         .get("流通市值")
                         .and_then(|v| v.as_f64())
                         .unwrap_or(0.0),
-                    total_market_cap: item
-                        .get("总市值")
-                        .and_then(|v| v.as_f64())
-                        .unwrap_or(0.0),
-                    turnover_rate: item
-                        .get("换手率")
-                        .and_then(|v| v.as_f64())
-                        .unwrap_or(0.0),
+                    total_market_cap: item.get("总市值").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                    turnover_rate: item.get("换手率").and_then(|v| v.as_f64()).unwrap_or(0.0),
                     limit_up_order_fund: item
                         .get("封板资金")
                         .and_then(|v| v.as_f64())
@@ -199,10 +180,8 @@ impl StockApi for Exchange {
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string(),
-                    limit_up_break_count: item
-                        .get("炸板次数")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(0) as u32,
+                    limit_up_break_count: item.get("炸板次数").and_then(|v| v.as_u64()).unwrap_or(0)
+                        as u32,
                     limit_up_stats: item
                         .get("涨停统计")
                         .and_then(|v| v.as_str())
