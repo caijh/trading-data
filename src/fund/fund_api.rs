@@ -32,7 +32,7 @@ impl FundApi for Exchange {
 
 async fn get_funds_from_szse(exchange: &Exchange) -> Result<Vec<Model>, Box<dyn Error>> {
     let url = format!(
-        "http://www.szse.cn/api/report/ShowReport?SHOWTYPE=xlsx&CATALOGID=1105&TABKEY=tab1&random={}",
+        "https://www.szse.cn/api/report/ShowReport?SHOWTYPE=xlsx&CATALOGID=1105&TABKEY=tab1&random={}",
         rng().random::<f64>()
     );
     let dir = tempdir()?;
@@ -43,18 +43,18 @@ async fn get_funds_from_szse(exchange: &Exchange) -> Result<Vec<Model>, Box<dyn 
 }
 
 async fn get_funds_from_hkex(exchange: &Exchange) -> Result<Vec<Stock>, Box<dyn Error>> {
-    let subcat_list = vec!["7", "9"]; // 交易所买卖基金，反向基金
+    let sub_category_list = vec!["7", "9"]; // 交易所买卖基金，反向基金
     let mut funds = Vec::new();
-    for subcat in subcat_list {
-        let stocks = get_funds_from_hkex_subcat(exchange, subcat).await?;
+    for sub_category in sub_category_list {
+        let stocks = get_funds_from_hkex_sub_category(exchange, sub_category).await?;
         funds.extend(stocks);
     }
     Ok(funds)
 }
 
-async fn get_funds_from_hkex_subcat(
+async fn get_funds_from_hkex_sub_category(
     exchange: &Exchange,
-    subcat: &str,
+    sub_category: &str,
 ) -> Result<Vec<Stock>, Box<dyn Error>> {
     let application_context = APPLICATION_CONTEXT.read().await;
     let environment = application_context.get_environment().await;
@@ -65,7 +65,7 @@ async fn get_funds_from_hkex_subcat(
     let timestamp = Local::now().timestamp_millis();
     let url = format!(
         "{}/hkexwidget/data/getetpfilter?lang=chi&token={}&subcat={}&sort=2&order=0&all=1&qid={}&callback=jQuery_{}&_={}",
-        base_url, token, subcat, timestamp, timestamp, timestamp,
+        base_url, token, sub_category, timestamp, timestamp, timestamp,
     );
     let client = Request::client().await;
     let response = client.get(url).send().await?;
