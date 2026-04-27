@@ -180,6 +180,9 @@ async fn get_current_price_from_sse(code: &str) -> Result<StockPriceDTO, Box<dyn
     } else {
         time
     };
+    // 成交量原单位是手，需要乘以 100 转换为股数
+    let volume_raw = snap.get(8).unwrap().as_f64().unwrap_or(0.0);
+    let volume = (volume_raw * 100.0).to_string();
     Ok(StockPriceDTO {
         h: snap.get(3).unwrap().to_string(),
         l: snap.get(4).unwrap().to_string(),
@@ -188,7 +191,7 @@ async fn get_current_price_from_sse(code: &str) -> Result<StockPriceDTO, Box<dyn
         p: snap.get(5).unwrap().to_string(),
         cje: snap.get(9).unwrap().to_string(),
         ud: snap.get(7).unwrap().to_string(),
-        v: snap.get(8).unwrap().to_string(),
+        v: volume,
         yc: snap.get(1).unwrap().to_string(),
         t: NaiveDateTime::parse_from_str(&format!("{}{}", date, time), "%Y%m%d%H%M%S")?
             .format("%Y-%m-%d %H:%M:%S")
@@ -213,6 +216,9 @@ async fn get_current_price_from_szse(code: &str) -> Result<StockPriceDTO, Box<dy
     let response = client.get(url).send().await?;
     let json: Value = response.json().await?;
     let data = json.get("data").unwrap();
+    // 成交量原单位是手，需要乘以 100 转换为股数
+    let volume_raw = data["volume"].as_f64().unwrap_or(0.0);
+    let volume = (volume_raw * 100.0).to_string();
     Ok(StockPriceDTO {
         h: data["high"].as_str().unwrap().to_string(),
         l: data["low"].as_str().unwrap().to_string(),
@@ -221,7 +227,7 @@ async fn get_current_price_from_szse(code: &str) -> Result<StockPriceDTO, Box<dy
         p: data["now"].as_str().unwrap().to_string(),
         cje: data["amount"].as_number().unwrap().to_string(),
         ud: data["delta"].as_str().unwrap().to_string(),
-        v: data["volume"].as_number().unwrap().to_string(),
+        v: volume,
         yc: "".to_string(),
         t: data["marketTime"].as_str().unwrap().to_string(),
     })
@@ -874,13 +880,15 @@ async fn get_current_price_from_nasdaq(
             v = v.replace(",", "");
             ud = ud.replace("$", "").replace(",", "").replace("+", "");
             let high;
-            let low ;
+            let low;
             let open;
             if stock.stock_type != "Fund" {
                 // Parse high and low from keyStats.dayrange.value (format: "470.00 - 476.75")
                 (high, low) = parse_dayrange(key_stats);
                 // 单独请求历史接口获取开盘价
-                open = get_open_price_from_nasdaq(exchange, &stock).await.unwrap_or_default();
+                open = get_open_price_from_nasdaq(exchange, &stock)
+                    .await
+                    .unwrap_or_default();
             } else {
                 // eft nasdaq接口没有dayrange字段，直接请求历史接口获取开盘价、最高价、最低价
                 let dto = get_latest_intraday_data_from_nasdaq(exchange, stock).await?;
