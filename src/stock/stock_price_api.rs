@@ -180,9 +180,6 @@ async fn get_current_price_from_sse(code: &str) -> Result<StockPriceDTO, Box<dyn
     } else {
         time
     };
-    // 成交量原单位是手，需要乘以 100 转换为股数
-    let volume_raw = snap.get(8).unwrap().as_f64().unwrap_or(0.0);
-    let volume = (volume_raw * 100.0).to_string();
     Ok(StockPriceDTO {
         h: snap.get(3).unwrap().to_string(),
         l: snap.get(4).unwrap().to_string(),
@@ -191,7 +188,7 @@ async fn get_current_price_from_sse(code: &str) -> Result<StockPriceDTO, Box<dyn
         p: snap.get(5).unwrap().to_string(),
         cje: snap.get(9).unwrap().to_string(),
         ud: snap.get(7).unwrap().to_string(),
-        v: volume,
+        v: snap.get(8).unwrap().to_string(),
         yc: snap.get(1).unwrap().to_string(),
         t: NaiveDateTime::parse_from_str(&format!("{}{}", date, time), "%Y%m%d%H%M%S")?
             .format("%Y-%m-%d %H:%M:%S")
